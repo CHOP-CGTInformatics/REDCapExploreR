@@ -38,10 +38,9 @@
 #'   token
 #' )
 #' }
-record_status_dashboard <- function(supertbl, redcap_uri, token) {
+record_status_dashboard <- function(supertbl) {
   has_arms <- "redcap_events" %in% names(supertbl)
 
-  # prepared_data <- prepare_tidy_tbls(redcap_uri, token)
   tidy_tbls <- prepare_tidy_tbls(supertbl)
   record_id_field <- REDCapTidieR:::get_record_id_field(supertbl$redcap_data[[1]])
 
@@ -59,26 +58,16 @@ record_status_dashboard <- function(supertbl, redcap_uri, token) {
     linked_arms <- do.call(rbind, supertbl$redcap_events) # TODO: Rename
 
     # Get the events to get event factor order
-    # TODO: Function dependent on dev version of REDCapR until next CRAN release
+    # TODO: How to reimplement event factor order?
     events <-
       linked_arms |>
       dplyr::distinct()
-    #   REDCapR::redcap_event_read(
-    #   redcap_uri = redcap_uri,
-    #   token = token, verbose = FALSE
-    # )$data |>
-    #   mutate(event_name = factor(.data$event_name, levels = .data$event_name, ordered = TRUE),
-    #          redcap_arm = arm_num,
-             # unique_event_name = event_name)
-
-    # linked_arms_current <- linked_arms %>%
-    #   left_join(events, by = c("unique_event_name", "arm_num"))
 
     # Apply the function across each named element (sub-table) of `out`
-    # out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
+    out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
 
     # Check placement here to ensure all unique event names are true ------------
-    # check_all_events(out, linked_arms)
+    # check_all_events(out, linked_arms) # TODO: Update
 
     combined_data <- combine_data(tidy_tbls, record_id_field, instrument_order, has_arms, linked_arms)
 
@@ -153,26 +142,19 @@ check_all_events <- function(data, linked_arms) {
 #' @keywords internal
 join_linked_arms <- function(data_tbl, linked_arms) {
   # Check if required columns exist in the sub-table
-  # if (all(c("redcap_form_name", "redcap_event") %in% colnames(data_tbl))) {
-  #   # Filter linked_arms to only keep relevant rows based on the prefix of unique_event_name
-  #   filtered_linked_arms <- linked_arms %>%
-  #     # Extract the prefix from unique_event_name
-  #     mutate(event_prefix = stringr::str_remove(.data$unique_event_name, "_arm_\\d+$")) %>%
-  #     dplyr::distinct(.data$form, .data$event_prefix, .data$unique_event_name)
-  #
-  #   # Perform the join and filter operation to ensure correct matching
-  #   data_tbl %>%
-  #     # TODO: Fix this. Can cause artificial inflation of rows
-  #     left_join(filtered_linked_arms, by = c("redcap_form_name" = "form"), relationship = "many-to-many") %>%
-  #     # Keep only rows where redcap_event matches the prefix
-  #     filter(startsWith(.data$redcap_event, .data$event_prefix)) %>%
-  #     select(-.data$event_prefix) # Remove the temporary event_prefix column
-  # } else {
+  if (all(c("redcap_form_name", "redcap_event") %in% colnames(data_tbl))) {
+
+    # TODO: Necessary?
+    data_tbl %>%
+      # TODO: Fix this. Can cause artificial inflation of rows
+      left_join(linked_arms, by = c("redcap_form_name" = "redcap_event"),
+                relationship = "many-to-many") %>%
+      select(infseq_id, form_status_complete, starts_with("redcap"))
+  } else {
     # If columns don't exist, return the sub-table unchanged
     data_tbl
-  # }
+  }
 }
-
 
 #' @title Join supertibble datatibbles and arrange by instrument/event order
 #'
@@ -275,59 +257,4 @@ reshape_data <- function(data, record_id_field) {
       !!sym(record_id_field) := factor(!!sym(record_id_field), levels = rev(unique(pivoted_data[[record_id_field]]))),
       form_name = factor(.data$form_name, levels = colnames(pivoted_data)[-1])
     )
-}
-
-
-#' @title
-#' Link longitudinal REDCap instruments with their events/arms
-#'
-#' @description
-#' For REDCap databases containing arms and events, it is necessary to determine
-#' how these are linked and what variables belong to them.
-#'
-#' @details
-#' This function is built similar to, but varies from [link_arms()] to reduce
-#' API calls and check failed status messages as an indicator for whether or not
-#' a database `has_arms`.
-#'
-#' @returns
-#' Returns a \code{tibble} of \code{redcap_event_name}s with list elements
-#' containing a vector of associated instruments.
-#'
-#' @param redcap_uri The REDCap URI
-#' @param token The REDCap API token
-#' @param suppress_redcapr_messages A logical to control whether to suppress messages
-#' from REDCapR API calls. Default `TRUE`.
-#'
-#' @keywords internal
-link_arms_rsd <- function(redcap_uri,
-                          token,
-                          suppress_redcapr_messages = TRUE) {
-  arm_export <- redcap_arm_export(redcap_uri, token, verbose = !suppress_redcapr_messages)
-  has_arms <- arm_export$has_arms
-
-  if (!has_arms) {
-    list(has_arms = has_arms, linked_arms = NULL)
-  } else {
-    arm_data <- arm_export$data %>%
-      # match field name of redcap_event_instruments() output
-      rename(arm_num = "arm_number")
-
-    db_event_instruments <- REDCapTidieR:::try_redcapr(
-      {
-        redcap_event_instruments(
-          redcap_uri = redcap_uri,
-          token = token,
-          arms = NULL, # get all arms
-          verbose = !suppress_redcapr_messages
-        )
-      },
-      call = caller_env()
-    )
-
-    list(
-      has_arms = has_arms,
-      linked_arms = left_join(db_event_instruments, arm_data, by = "arm_num")
-    )
-  }
 }
