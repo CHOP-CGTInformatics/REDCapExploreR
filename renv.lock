@@ -25,14 +25,9 @@
     },
     "REDCapR": {
       "Package": "REDCapR",
-      "Version": "1.1.9005",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteUsername": "OuhscBbmc",
-      "RemoteRepo": "REDCapR",
-      "RemoteRef": "main",
-      "RemoteSha": "a345d788408ec626cf8dd01eba2b6ee59dbab338",
+      "Version": "1.3.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
       "Requirements": [
         "R",
         "checkmate",
@@ -46,11 +41,11 @@
         "tibble",
         "tidyr"
       ],
-      "Hash": "98d0a448f7ac5d08296f89482cd3841c"
+      "Hash": "de630e9e6168aae0a178eaa3198dbe54"
     },
     "REDCapTidieR": {
       "Package": "REDCapTidieR",
-      "Version": "1.1.1",
+      "Version": "1.2.0",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -60,6 +55,7 @@
         "cli",
         "dplyr",
         "formattable",
+        "glue",
         "lobstr",
         "lubridate",
         "pillar",
@@ -74,7 +70,7 @@
         "tidyselect",
         "vctrs"
       ],
-      "Hash": "f4b111e8ad23f3de881064bb96205bcf"
+      "Hash": "f6d7d04c14c1db4fb761750e1d75602b"
     },
     "askpass": {
       "Package": "askpass",

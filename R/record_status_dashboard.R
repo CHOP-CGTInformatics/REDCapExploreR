@@ -38,13 +38,11 @@
 #'   token
 #' )
 #' }
-record_status_dashboard <- function(redcap_uri, token) {
-  linked_arms_list <- link_arms_rsd(redcap_uri, token)
-  has_arms <- linked_arms_list$has_arms
+record_status_dashboard <- function(supertbl, redcap_uri, token) {
+  has_arms <- "redcap_events" %in% names(supertbl)
 
-  prepared_data <- prepare_supertbl_data(redcap_uri, token)
-  supertbl <- prepared_data$supertbl
-  tidy_tbls <- prepared_data$tidy_tbls
+  # prepared_data <- prepare_tidy_tbls(redcap_uri, token)
+  tidy_tbls <- prepare_tidy_tbls(supertbl)
   record_id_field <- REDCapTidieR:::get_record_id_field(supertbl$redcap_data[[1]])
 
   instrument_order <- factor(supertbl$redcap_form_label, levels = supertbl$redcap_form_label, ordered = TRUE)
@@ -53,30 +51,36 @@ record_status_dashboard <- function(redcap_uri, token) {
   if (!has_arms) {
     combined_data <- combine_data(tidy_tbls, record_id_field, instrument_order, has_arms)
 
-    out <- combined_data %>%
-      reshape_data(record_id_field = record_id_field)
+    out <- reshape_data(combined_data, record_id_field = record_id_field)
   }
 
   # For Longitudinal Databases ----
   if (has_arms) {
+    linked_arms <- do.call(rbind, supertbl$redcap_events) # TODO: Rename
+
     # Get the events to get event factor order
     # TODO: Function dependent on dev version of REDCapR until next CRAN release
-    events <- REDCapR::redcap_event_read(
-      redcap_uri = redcap_uri,
-      token = token, verbose = FALSE
-    )$data |>
-      mutate(event_name = factor(.data$event_name, levels = .data$event_name, ordered = TRUE))
+    events <-
+      linked_arms |>
+      dplyr::distinct()
+    #   REDCapR::redcap_event_read(
+    #   redcap_uri = redcap_uri,
+    #   token = token, verbose = FALSE
+    # )$data |>
+    #   mutate(event_name = factor(.data$event_name, levels = .data$event_name, ordered = TRUE),
+    #          redcap_arm = arm_num,
+             # unique_event_name = event_name)
 
-    linked_arms <- linked_arms_list$linked_arms %>%
-      left_join(events, by = c("unique_event_name", "arm_num"))
+    # linked_arms_current <- linked_arms %>%
+    #   left_join(events, by = c("unique_event_name", "arm_num"))
 
     # Apply the function across each named element (sub-table) of `out`
-    out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
+    # out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
 
     # Check placement here to ensure all unique event names are true ------------
-    check_all_events(out, linked_arms)
+    # check_all_events(out, linked_arms)
 
-    combined_data <- combine_data(out, record_id_field, instrument_order, has_arms, linked_arms)
+    combined_data <- combine_data(tidy_tbls, record_id_field, instrument_order, has_arms, linked_arms)
 
     out <- combined_data %>%
       reshape_data(record_id_field = record_id_field)
@@ -95,8 +99,7 @@ record_status_dashboard <- function(redcap_uri, token) {
 #' @keywords internal
 #'
 #' @returns a list
-prepare_supertbl_data <- function(redcap_uri, token) {
-  supertbl <- read_redcap(redcap_uri, token)
+prepare_tidy_tbls <- function(supertbl) {
   tidy_tbls <- supertbl %>%
     mutate(
       redcap_data = map2(
@@ -113,7 +116,7 @@ prepare_supertbl_data <- function(redcap_uri, token) {
     ) %>%
     extract_tibbles()
 
-  list(supertbl = supertbl, tidy_tbls = tidy_tbls)
+  tidy_tbls
 }
 
 #' @title Check that all unique event names exist in linked arms
@@ -150,24 +153,24 @@ check_all_events <- function(data, linked_arms) {
 #' @keywords internal
 join_linked_arms <- function(data_tbl, linked_arms) {
   # Check if required columns exist in the sub-table
-  if (all(c("redcap_form_name", "redcap_event") %in% colnames(data_tbl))) {
-    # Filter linked_arms to only keep relevant rows based on the prefix of unique_event_name
-    filtered_linked_arms <- linked_arms %>%
-      # Extract the prefix from unique_event_name
-      mutate(event_prefix = stringr::str_remove(.data$unique_event_name, "_arm_\\d+$")) %>%
-      dplyr::distinct(.data$form, .data$event_prefix, .data$unique_event_name)
-
-    # Perform the join and filter operation to ensure correct matching
-    data_tbl %>%
-      # TODO: Fix this. Can cause artificial inflation of rows
-      left_join(filtered_linked_arms, by = c("redcap_form_name" = "form"), relationship = "many-to-many") %>%
-      # Keep only rows where redcap_event matches the prefix
-      filter(startsWith(.data$redcap_event, .data$event_prefix)) %>%
-      select(-.data$event_prefix) # Remove the temporary event_prefix column
-  } else {
+  # if (all(c("redcap_form_name", "redcap_event") %in% colnames(data_tbl))) {
+  #   # Filter linked_arms to only keep relevant rows based on the prefix of unique_event_name
+  #   filtered_linked_arms <- linked_arms %>%
+  #     # Extract the prefix from unique_event_name
+  #     mutate(event_prefix = stringr::str_remove(.data$unique_event_name, "_arm_\\d+$")) %>%
+  #     dplyr::distinct(.data$form, .data$event_prefix, .data$unique_event_name)
+  #
+  #   # Perform the join and filter operation to ensure correct matching
+  #   data_tbl %>%
+  #     # TODO: Fix this. Can cause artificial inflation of rows
+  #     left_join(filtered_linked_arms, by = c("redcap_form_name" = "form"), relationship = "many-to-many") %>%
+  #     # Keep only rows where redcap_event matches the prefix
+  #     filter(startsWith(.data$redcap_event, .data$event_prefix)) %>%
+  #     select(-.data$event_prefix) # Remove the temporary event_prefix column
+  # } else {
     # If columns don't exist, return the sub-table unchanged
     data_tbl
-  }
+  # }
 }
 
 
@@ -212,7 +215,7 @@ combine_data <- function(data, record_id_field, instrument_order, has_arms, link
         redcap_form_label = factor(.data$redcap_form_label, levels = levels(instrument_order), ordered = TRUE)
       ) %>%
       mutate(
-        redcap_event_label = purrr::map_chr(.data$unique_event_name, ~ get_event_name(.x, linked_arms = linked_arms)),
+        redcap_event_label = purrr::map_chr(.data$redcap_event, ~ get_event_name(.x, linked_arms = linked_arms)),
         redcap_event_label = factor(.data$redcap_event_label, levels = levels(linked_arms$event_name), ordered = TRUE)
       ) |>
       dplyr::arrange(record_id_field, .data$redcap_event_label)
@@ -222,7 +225,7 @@ combine_data <- function(data, record_id_field, instrument_order, has_arms, link
 #' @noRd
 get_event_name <- function(redcap_event, linked_arms) {
   linked_arms |>
-    filter(.data$unique_event_name == redcap_event) |>
+    filter(.data$redcap_event == !!redcap_event) |>
     pull(.data$event_name) |>
     unique() |>
     as.character()

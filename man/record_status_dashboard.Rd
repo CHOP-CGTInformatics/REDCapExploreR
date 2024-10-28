@@ -4,7 +4,7 @@
 \alias{record_status_dashboard}
 \title{Create a Record Status Dashboard Dataframe}
 \usage{
-record_status_dashboard(redcap_uri, token)
+record_status_dashboard(supertbl, redcap_uri, token)
 }
 \arguments{
 \item{redcap_uri}{The
