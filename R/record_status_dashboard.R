@@ -22,8 +22,6 @@
 #' especially useful when dealing with projects that utilize repeating forms or
 #' multiple events.
 #'
-#' @inheritParams REDCapTidieR::read_redcap
-#'
 #' @return A dataframe representing the Record Status Dashboard view of a REDCap project.
 #' Each row corresponds to a record, and columns represent different forms, events, and their
 #' respective status indicators.
@@ -44,7 +42,8 @@ record_status_dashboard <- function(supertbl) {
   tidy_tbls <- prepare_tidy_tbls(supertbl)
   record_id_field <- REDCapTidieR:::get_record_id_field(supertbl$redcap_data[[1]])
 
-  instrument_order <- factor(supertbl$redcap_form_label, levels = supertbl$redcap_form_label, ordered = TRUE)
+  instrument_order <- factor(supertbl$redcap_form_label,
+                             levels = supertbl$redcap_form_label, ordered = TRUE)
 
   # For Classic Databases ----
   if (!has_arms) {
@@ -58,16 +57,13 @@ record_status_dashboard <- function(supertbl) {
     linked_arms <- do.call(rbind, supertbl$redcap_events) # TODO: Rename
 
     # Get the events to get event factor order
-    # TODO: How to reimplement event factor order?
+    # TODO: How to re-implement event factor order?
     events <-
       linked_arms |>
       dplyr::distinct()
 
     # Apply the function across each named element (sub-table) of `out`
     out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
-
-    # Check placement here to ensure all unique event names are true ------------
-    # check_all_events(out, linked_arms) # TODO: Update
 
     combined_data <- combine_data(tidy_tbls, record_id_field, instrument_order, has_arms, linked_arms)
 
@@ -106,24 +102,6 @@ prepare_tidy_tbls <- function(supertbl) {
     extract_tibbles()
 
   tidy_tbls
-}
-
-#' @title Check that all unique event names exist in linked arms
-#'
-#' @param data a dataframe
-#' @param linked_arms a dataframe output from [link_arms_rsd()] data
-#'
-#' @keywords internal
-check_all_events <- function(data, linked_arms) {
-  # Get the unique event names from each datatibble
-  unique_event_name_vals <- data %>%
-    map(~ select(.x, unique_event_name)) %>%
-    unlist() %>%
-    unique()
-
-  if (!all(unique_event_name_vals %in% linked_arms$unique_event_name)) {
-    cli_abort(message = c("x" = "Not working! (Message to be improved)"))
-  }
 }
 
 #' @title Join the a linked arms dataset onto a supertibble data tibble
@@ -178,14 +156,20 @@ join_linked_arms <- function(data_tbl, linked_arms) {
 #' @returns a dataframe
 #'
 #' @keywords internal
-combine_data <- function(data, record_id_field, instrument_order, has_arms, linked_arms = NULL) {
+combine_data <- function(data,
+                         record_id_field,
+                         instrument_order,
+                         has_arms,
+                         linked_arms = NULL) {
   common_columns <- Reduce(intersect, lapply(data, names)) # nolint: object_usage_linter
 
   out <- data %>%
     map(~ select(.x, all_of(common_columns))) %>%
     bind_rows() %>%
     mutate(
-      redcap_form_label = factor(.data$redcap_form_label, levels = levels(instrument_order), ordered = TRUE)
+      redcap_form_label = factor(.data$redcap_form_label,
+                                 levels = levels(instrument_order),
+                                 ordered = TRUE)
     )
 
   if (!has_arms) {
@@ -194,11 +178,14 @@ combine_data <- function(data, record_id_field, instrument_order, has_arms, link
   } else {
     out %>%
       mutate(
-        redcap_form_label = factor(.data$redcap_form_label, levels = levels(instrument_order), ordered = TRUE)
+        redcap_form_label = factor(.data$redcap_form_label,
+                                   levels = levels(instrument_order),
+                                   ordered = TRUE)
       ) %>%
       mutate(
-        redcap_event_label = purrr::map_chr(.data$redcap_event, ~ get_event_name(.x, linked_arms = linked_arms)),
-        redcap_event_label = factor(.data$redcap_event_label, levels = levels(linked_arms$event_name), ordered = TRUE)
+        redcap_event_label = purrr::map_chr(.data$redcap_event,
+                                            ~ get_event_name(.x, linked_arms = linked_arms))
+        # TODO: Reimplement factor level order
       ) |>
       dplyr::arrange(record_id_field, .data$redcap_event_label)
   }

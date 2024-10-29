@@ -4,15 +4,7 @@
 \alias{record_status_dashboard}
 \title{Create a Record Status Dashboard Dataframe}
 \usage{
-record_status_dashboard(supertbl, redcap_uri, token)
-}
-\arguments{
-\item{redcap_uri}{The
-URI/URL of the REDCap server (e.g.,
-"https://server.org/apps/redcap/api/"). Required.}
-
-\item{token}{The user-specific string that serves as the password for a
-project. Required.}
+record_status_dashboard(supertbl)
 }
 \value{
 A dataframe representing the Record Status Dashboard view of a REDCap project.
