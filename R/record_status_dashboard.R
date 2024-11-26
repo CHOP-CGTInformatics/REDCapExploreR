@@ -37,35 +37,40 @@
 #' )
 #' }
 record_status_dashboard <- function(supertbl) {
+
   has_arms <- "redcap_events" %in% names(supertbl)
 
   tidy_tbls <- prepare_tidy_tbls(supertbl)
   record_id_field <- REDCapTidieR:::get_record_id_field(supertbl$redcap_data[[1]])
 
   instrument_order <- factor(supertbl$redcap_form_label,
-                             levels = supertbl$redcap_form_label, ordered = TRUE)
+                             levels = supertbl$redcap_form_label)
 
   # For Classic Databases ----
   if (!has_arms) {
-    combined_data <- combine_data(tidy_tbls, record_id_field, instrument_order, has_arms)
+    combined_data <- combine_data(data = tidy_tbls,
+                                  record_id_field = record_id_field,
+                                  instrument_order = instrument_order,
+                                  has_arms = has_arms)
 
     out <- reshape_data(combined_data, record_id_field = record_id_field)
   }
 
   # For Longitudinal Databases ----
   if (has_arms) {
-    linked_arms <- do.call(rbind, supertbl$redcap_events) # TODO: Rename
+    linked_arms <- do.call(rbind, supertbl$redcap_events)
 
-    # Get the events to get event factor order
-    # TODO: How to re-implement event factor order?
-    events <-
-      linked_arms |>
-      dplyr::distinct()
+    event_order <- levels(linked_arms$event_name)
 
     # Apply the function across each named element (sub-table) of `out`
     out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
 
-    combined_data <- combine_data(tidy_tbls, record_id_field, instrument_order, has_arms, linked_arms)
+    combined_data <- combine_data(data = tidy_tbls,
+                                  record_id_field = record_id_field,
+                                  instrument_order = instrument_order,
+                                  event_order = event_order,
+                                  has_arms = has_arms,
+                                  linked_arms = linked_arms)
 
     out <- combined_data %>%
       reshape_data(record_id_field = record_id_field)
@@ -149,6 +154,7 @@ join_linked_arms <- function(data_tbl, linked_arms) {
 #' @param record_id_field the record ID field for the REDCap project identified by
 #' [REDCapTidieR:::get_record_id_field()]
 #' @param instrument_order a vector determining the factor level order of the project instruments
+#' @param event_order a vector determining the factor level order of the project events
 #' @param has_arms TRUE/FALSE whether or not the project is longitudinal/has arms
 #' @param linked_arms if a longitudinal project, use the linked_arms data output from
 #' [link_arms_rsd()]. Default `NULL`.
@@ -159,6 +165,7 @@ join_linked_arms <- function(data_tbl, linked_arms) {
 combine_data <- function(data,
                          record_id_field,
                          instrument_order,
+                         event_order = NULL,
                          has_arms,
                          linked_arms = NULL) {
   common_columns <- Reduce(intersect, lapply(data, names)) # nolint: object_usage_linter
@@ -179,13 +186,13 @@ combine_data <- function(data,
     out %>%
       mutate(
         redcap_form_label = factor(.data$redcap_form_label,
-                                   levels = levels(instrument_order),
-                                   ordered = TRUE)
+                                   levels = levels(instrument_order))
       ) %>%
       mutate(
         redcap_event_label = purrr::map_chr(.data$redcap_event,
-                                            ~ get_event_name(.x, linked_arms = linked_arms))
-        # TODO: Reimplement factor level order
+                                            ~ get_event_name(.x, linked_arms = linked_arms)),
+        redcap_event_label = factor(.data$redcap_event_label,
+                                    levels = event_order)
       ) |>
       dplyr::arrange(record_id_field, .data$redcap_event_label)
   }
