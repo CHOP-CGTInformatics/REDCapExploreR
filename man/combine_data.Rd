@@ -8,6 +8,7 @@ combine_data(
   data,
   record_id_field,
   instrument_order,
+  event_order,
   has_arms,
   linked_arms = NULL
 )
@@ -19,6 +20,8 @@ combine_data(
 [REDCapTidieR:::get_record_id_field()]}
 
 \item{instrument_order}{a vector determining the factor level order of the project instruments}
+
+\item{event_order}{a vector determining the factor level order of the project events}
 
 \item{has_arms}{TRUE/FALSE whether or not the project is longitudinal/has arms}
 
