@@ -8,7 +8,7 @@ combine_data(
   data,
   record_id_field,
   instrument_order,
-  event_order,
+  event_order = NULL,
   has_arms,
   linked_arms = NULL
 )
@@ -16,8 +16,7 @@ combine_data(
 \arguments{
 \item{data}{a named list of data tibbles from the supertbl}
 
-\item{record_id_field}{the record ID field for the REDCap project identified by
-[REDCapTidieR:::get_record_id_field()]}
+\item{record_id_field}{the record ID field for the REDCap project.}
 
 \item{instrument_order}{a vector determining the factor level order of the project instruments}
 
@@ -25,8 +24,7 @@ combine_data(
 
 \item{has_arms}{TRUE/FALSE whether or not the project is longitudinal/has arms}
 
-\item{linked_arms}{if a longitudinal project, use the linked_arms data output from
-[link_arms_rsd()]. Default `NULL`.}
+\item{linked_arms}{linked arms data for a longitudinal project. Default \code{NULL}.}
 }
 \value{
 a dataframe
@@ -34,11 +32,12 @@ a dataframe
 \description{
 This function takes a list of data tibbles and binds together
 the columns necessary for the record status dashboard view:
-
-- the record ID
-- the form completion status
-- the unique event name
-- the redcap form label
-- the redcap event label (if longitudinal)
+\itemize{
+\item the record ID
+\item the form completion status
+\item the unique event name
+\item the redcap form label
+\item the redcap event label (if longitudinal)
+}
 }
 \keyword{internal}

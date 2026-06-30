@@ -4,8 +4,8 @@
 \name{REDCapExploreR-package}
 \alias{REDCapExploreR}
 \alias{REDCapExploreR-package}
-\title{REDCapExploreR: What the Package Does (Title Case)}
+\title{REDCapExploreR: Exploratory Data Quality Tools for REDCap Projects}
 \description{
-More about what it does (maybe more than one line) Use four spaces when indenting paragraphs within the Description.
+Provides tools to explore REDCap projects, summarize project structure, and flag common data quality issues for data managers.
 }
 \keyword{internal}

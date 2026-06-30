@@ -6,13 +6,16 @@
 \usage{
 record_status_dashboard(supertbl)
 }
+\arguments{
+\item{supertbl}{A REDCapTidieR supertibble.}
+}
 \value{
 A dataframe representing the Record Status Dashboard view of a REDCap project.
 Each row corresponds to a record, and columns represent different forms, events, and their
 respective status indicators.
 }
 \description{
-[record_status_dashboard()] creates a dataframe that replicates the display of
+\code{\link[=record_status_dashboard]{record_status_dashboard()}} creates a dataframe that replicates the display of
 the Record Status Dashboard from a REDCap project, given a REDCap API URI and token.
 This function provides a structured overview of the status of records and their
 associated instruments and events, similar to what is seen in the REDCap web interface.
@@ -26,7 +29,7 @@ understanding the state of records within a REDCap project, displaying their
 completion statuses across various instruments and events. It can show whether
 forms are marked as complete, in progress/unverified, incomplete, or not yet opened.
 
-[record_status_dashboard()] captures this information and provides it in a
+\code{\link[=record_status_dashboard]{record_status_dashboard()}} captures this information and provides it in a
 structured dataframe format. By default, the function converts form completion
 status into a percentage format, accounting for repeating instruments with overlapping
 form status fields. This allows for a more flexible representation of the data,

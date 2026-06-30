@@ -9,15 +9,15 @@ join_linked_arms(data_tbl, linked_arms)
 \arguments{
 \item{data_tbl}{a data tibble from a supertibble}
 
-\item{linked_arms}{a dataframe output from [link_arms_rsd()] data}
+\item{linked_arms}{linked arms data}
 }
 \value{
 a data tibble appended with linked arms data
 }
 \description{
-Using a data output from [link_arms_rsd()], join onto each data tibble to make
-the original event name accessible. During [read_redcap()] operations,
+Using linked arms data, join onto each data tibble to make
+the original event name accessible. During \code{\link[REDCapTidieR:read_redcap]{REDCapTidieR::read_redcap()}} operations,
 event names have an "arm" suffix that gets dropped. This looks to reinstate it
-for proper links later on in the [record_status_dashboard()] logic.
+for proper links later on in the \code{\link[=record_status_dashboard]{record_status_dashboard()}} logic.
 }
 \keyword{internal}

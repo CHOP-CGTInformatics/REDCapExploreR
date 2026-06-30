@@ -22,6 +22,8 @@
 #' especially useful when dealing with projects that utilize repeating forms or
 #' multiple events.
 #'
+#' @param supertbl A REDCapTidieR supertibble.
+#'
 #' @return A dataframe representing the Record Status Dashboard view of a REDCap project.
 #' Each row corresponds to a record, and columns represent different forms, events, and their
 #' respective status indicators.
@@ -112,13 +114,13 @@ prepare_tidy_tbls <- function(supertbl) {
 #' @title Join the a linked arms dataset onto a supertibble data tibble
 #'
 #' @description
-#' Using a data output from [link_arms_rsd()], join onto each data tibble to make
+#' Using linked arms data, join onto each data tibble to make
 #' the original event name accessible. During [read_redcap()] operations,
 #' event names have an "arm" suffix that gets dropped. This looks to reinstate it
 #' for proper links later on in the [record_status_dashboard()] logic.
 #'
 #' @param data_tbl a data tibble from a supertibble
-#' @param linked_arms a dataframe output from [link_arms_rsd()] data
+#' @param linked_arms linked arms data
 #'
 #' @returns a data tibble appended with linked arms data
 #'
@@ -151,13 +153,11 @@ join_linked_arms <- function(data_tbl, linked_arms) {
 #' - the redcap event label (if longitudinal)
 #'
 #' @param data a named list of data tibbles from the supertbl
-#' @param record_id_field the record ID field for the REDCap project identified by
-#' [REDCapTidieR:::get_record_id_field()]
+#' @param record_id_field the record ID field for the REDCap project.
 #' @param instrument_order a vector determining the factor level order of the project instruments
 #' @param event_order a vector determining the factor level order of the project events
 #' @param has_arms TRUE/FALSE whether or not the project is longitudinal/has arms
-#' @param linked_arms if a longitudinal project, use the linked_arms data output from
-#' [link_arms_rsd()]. Default `NULL`.
+#' @param linked_arms linked arms data for a longitudinal project. Default `NULL`.
 #'
 #' @returns a dataframe
 #'
@@ -217,8 +217,7 @@ get_event_name <- function(redcap_event, linked_arms) {
 #' - the completion status of that field, default as a percentage
 #'
 #' @param data a bound data tibble output from [combine_data()]
-#' @param record_id_field the record ID field for the REDCap project identified by
-#' [REDCapTidieR:::get_record_id_field()]
+#' @param record_id_field the record ID field for the REDCap project.
 #'
 #' @returns a dataframe
 #'

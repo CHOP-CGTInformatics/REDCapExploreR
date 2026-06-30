@@ -7,20 +7,20 @@
 reshape_data(data, record_id_field)
 }
 \arguments{
-\item{data}{a bound data tibble output from [combine_data()]}
+\item{data}{a bound data tibble output from \code{\link[=combine_data]{combine_data()}}}
 
-\item{record_id_field}{the record ID field for the REDCap project identified by
-[REDCapTidieR:::get_record_id_field()]}
+\item{record_id_field}{the record ID field for the REDCap project.}
 }
 \value{
 a dataframe
 }
 \description{
-This function takes the output of [combine_data()] and performs
+This function takes the output of \code{\link[=combine_data]{combine_data()}} and performs
 several pivoting operations to get the data in a format that yields only 3 columns:
-
-- the record ID field for the REDCap project
-- the form name field, combined with the event field if applicable to a longitudinal project
-- the completion status of that field, default as a percentage
+\itemize{
+\item the record ID field for the REDCap project
+\item the form name field, combined with the event field if applicable to a longitudinal project
+\item the completion status of that field, default as a percentage
+}
 }
 \keyword{internal}
