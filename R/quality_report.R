@@ -1309,20 +1309,19 @@ get_expected_supertbl_completion_status <- function(project) {
   }
 
   event_field <- get_event_field(project$data)
-  record_event_data <- if (is.na(event_field)) {
-    project$data |>
+  record_events <- if (is.na(event_field)) {
+    record_event_data <- project$data |>
       filter(.data$redcap_form_name %in% nonrepeating_forms)
+
+    tibble(
+      record_id = as.character(record_event_data[[project$record_id_field]]),
+      event_name = NA_character_
+    )
   } else {
-    project$data
+    get_expected_supertbl_record_events(project, event_field)
   }
-  record_events <- tibble(
-    record_id = as.character(record_event_data[[project$record_id_field]]),
-    event_name = if (is.na(event_field)) {
-      NA_character_
-    } else {
-      as.character(record_event_data[[event_field]])
-    }
-  ) |>
+
+  record_events <- record_events |>
     distinct() |>
     get_ordered_record_events(project)
 
@@ -1335,6 +1334,41 @@ get_expected_supertbl_completion_status <- function(project) {
         value = get_expected_completion_value(project, current_form, .data$event_name)
       )
   }))
+}
+
+get_expected_supertbl_record_events <- function(project, event_field) {
+  if (
+    nrow(project$events) > 0 &&
+      all(c("redcap_event_name", "redcap_arm") %in% names(project$events)) &&
+      "redcap_arm" %in% names(project$data)
+  ) {
+    record_arms <- project$data |>
+      transmute(
+        record_id = as.character(.data[[project$record_id_field]]),
+        redcap_arm = as.character(.data$redcap_arm)
+      ) |>
+      filter(!get_is_missing(.data$record_id), !get_is_missing(.data$redcap_arm)) |>
+      distinct()
+
+    event_arms <- project$events |>
+      transmute(
+        event_name = as.character(.data$redcap_event_name),
+        redcap_arm = as.character(.data$redcap_arm)
+      ) |>
+      filter(!get_is_missing(.data$event_name), !get_is_missing(.data$redcap_arm)) |>
+      distinct()
+
+    if (nrow(record_arms) > 0 && nrow(event_arms) > 0) {
+      return(record_arms |>
+        left_join(event_arms, by = "redcap_arm", relationship = "many-to-many") |>
+        select("record_id", "event_name"))
+    }
+  }
+
+  tibble(
+    record_id = as.character(project$data[[project$record_id_field]]),
+    event_name = as.character(project$data[[event_field]])
+  )
 }
 
 get_supertbl_nonrepeating_forms <- function(project) {
@@ -1422,19 +1456,24 @@ get_consistency_findings <- function(project) {
     sub("___.*$", "", names(project$data)[str_detect(names(project$data), "___")])
   )
 
+  if (length(checkbox_groups) == 0) {
+    return(get_empty_findings())
+  }
+
   bind_rows(map(names(checkbox_groups), \(field) {
     columns <- checkbox_groups[[field]]
-    none_columns <- columns[str_detect(tolower(columns), "none|not_applicable|n_a|none_of")]
+    none_columns <- columns[str_detect(columns, "___(none|no|not_applicable|na)$")]
+    other_columns <- setdiff(columns, none_columns)
 
-    if (length(none_columns) == 0 || length(setdiff(columns, none_columns)) == 0) {
+    if (length(none_columns) == 0 || length(other_columns) == 0) {
       return(get_empty_findings())
     }
 
     none_checked <- Reduce(`|`, lapply(project$data[none_columns], get_is_checked))
-    other_checked <- Reduce(`|`, lapply(project$data[setdiff(columns, none_columns)], get_is_checked))
+    other_checked <- Reduce(`|`, lapply(project$data[other_columns], get_is_checked))
     contradiction <- none_checked & other_checked
 
-    if (!any(contradiction)) {
+    if (!any(contradiction, na.rm = TRUE)) {
       return(get_empty_findings())
     }
 

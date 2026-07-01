@@ -801,10 +801,15 @@ test_that("raw and supertbl longitudinal event names align", {
 
   raw_report <- build_quality_report(
     data = tibble::tibble(
-      record_id = c("1", "2"),
-      redcap_event_name = c("event_1_arm_1", "event_2_arm_1"),
-      name = c("one", "two"),
-      demographics_complete = c(0, 1)
+      record_id = c("1", "1", "2", "2"),
+      redcap_event_name = c(
+        "event_1_arm_1",
+        "event_2_arm_1",
+        "event_1_arm_1",
+        "event_2_arm_1"
+      ),
+      name = c("one", NA, NA, "two"),
+      demographics_complete = c(0, 0, 0, 1)
     ),
     metadata = metadata,
     checks = "operational",
@@ -843,6 +848,121 @@ test_that("raw and supertbl longitudinal event names align", {
   expect_equal(
     sort(unique(supertbl_report$summaries$events$event_name)),
     c("event_1_arm_1", "event_2_arm_1")
+  )
+})
+
+test_that("raw and supertbl longitudinal completion findings align without repeating instruments", {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "name", "lab_value"),
+    form_name = c("nonrepeated", "nonrepeated", "nonrepeated2"),
+    field_type = c("text", "text", "text"),
+    field_label = c("Record ID", "Name", "Lab Value")
+  )
+  raw_data <- tibble::tibble(
+    record_id = c("1", "1", "2", "2", "3", "3", "4", "4"),
+    redcap_event_name = c(
+      "event_1_arm_1",
+      "event_2_arm_1",
+      "event_1_arm_1",
+      "event_2_arm_1",
+      "event_1_arm_1",
+      "event_2_arm_1",
+      "event_1_arm_2",
+      "event_3_arm_2"
+    ),
+    name = c("one", NA, "two", NA, "three", NA, "four", NA),
+    lab_value = c("a", NA, "b", NA, "c", NA, "d", NA),
+    nonrepeated_complete = c(2, 0, 0, 0, 2, 0, 0, 0),
+    nonrepeated2_complete = c(0, NA, 0, NA, 0, NA, 0, NA)
+  )
+  raw_events <- tibble::tibble(
+    redcap_event_name = c(
+      "event_1_arm_1",
+      "event_2_arm_1",
+      "event_1_arm_2",
+      "event_3_arm_2"
+    ),
+    redcap_arm = c(1, 1, 2, 2)
+  )
+
+  supertbl <- tibble::tibble(
+    redcap_form_name = c("nonrepeated", "nonrepeated2"),
+    redcap_form_label = c("Nonrepeated", "Nonrepeated 2"),
+    structure = c("nonrepeating", "nonrepeating"),
+    redcap_data = list(
+      tibble::tibble(
+        record_id = c("1", "1", "2", "2", "3", "4", "4"),
+        redcap_event = c(
+          "event_1",
+          "event_2",
+          "event_1",
+          "event_2",
+          "event_1",
+          "event_1",
+          "event_3"
+        ),
+        redcap_arm = c(1, 1, 1, 1, 1, 2, 2),
+        name = c("one", NA, "two", NA, "three", "four", NA),
+        form_status_complete = c(
+          "Complete",
+          "Incomplete",
+          "Incomplete",
+          "Incomplete",
+          "Complete",
+          "Incomplete",
+          "Incomplete"
+        )
+      ),
+      tibble::tibble(
+        record_id = c("1", "2", "4"),
+        redcap_event = c("event_1", "event_1", "event_1"),
+        redcap_arm = c(1, 1, 2),
+        lab_value = c("a", "b", "d"),
+        form_status_complete = c("Incomplete", "Incomplete", "Incomplete")
+      )
+    ),
+    redcap_metadata = list(
+      metadata |>
+        dplyr::filter(.data$form_name == "nonrepeated"),
+      metadata |>
+        dplyr::filter(.data$form_name == "nonrepeated2")
+    ),
+    redcap_events = list(
+      tibble::tibble(
+        redcap_event = c("event_1", "event_2", "event_1", "event_3"),
+        redcap_arm = c(1, 1, 2, 2)
+      ),
+      tibble::tibble(
+        redcap_event = c("event_1", "event_1"),
+        redcap_arm = c(1, 2)
+      )
+    )
+  )
+
+  raw_report <- build_quality_report(
+    data = raw_data,
+    metadata = metadata,
+    events = raw_events,
+    checks = "operational",
+    progress = "none"
+  )
+  supertbl_report <- build_quality_report(
+    data = supertbl,
+    checks = "operational",
+    progress = "none"
+  )
+
+  raw_findings <- raw_report$findings |>
+    dplyr::select("record_id", "form_name", "event_name", "field_name", "value")
+  supertbl_findings <- supertbl_report$findings |>
+    dplyr::select("record_id", "form_name", "event_name", "field_name", "value")
+
+  expect_equal(raw_findings, supertbl_findings)
+  expect_true(
+    any(
+      supertbl_findings$record_id == "3" &
+        supertbl_findings$event_name == "event_2_arm_1"
+    )
   )
 })
 
@@ -916,11 +1036,13 @@ test_that("supertbl synthesized form statuses use event instrument mapping", {
   expect_equal(
     findings,
     tibble::tibble(
-      record_id = c("1", "2", "2", "1", "2", "2", "2"),
+      record_id = c("1", "1", "2", "2", "1", "1", "2", "2", "2"),
       form_name = c(
         "nonrepeated",
         "nonrepeated",
         "nonrepeated",
+        "nonrepeated",
+        "nonrepeated2",
         "nonrepeated2",
         "nonrepeated2",
         "nonrepeated2",
@@ -928,9 +1050,11 @@ test_that("supertbl synthesized form statuses use event instrument mapping", {
       ),
       event_name = c(
         "event_1_arm_1",
+        "event_2_arm_1",
         "event_1_arm_1",
         "event_2_arm_1",
         "event_1_arm_1",
+        "event_2_arm_1",
         "event_1_arm_1",
         "event_2_arm_1",
         "event_2_arm_1"
@@ -939,6 +1063,8 @@ test_that("supertbl synthesized form statuses use event instrument mapping", {
         "nonrepeated_complete",
         "nonrepeated_complete",
         "nonrepeated_complete",
+        "nonrepeated_complete",
+        "nonrepeated2_complete",
         "nonrepeated2_complete",
         "nonrepeated2_complete",
         "nonrepeated2_complete",
@@ -949,6 +1075,8 @@ test_that("supertbl synthesized form statuses use event instrument mapping", {
         "Incomplete",
         "Incomplete",
         "Incomplete",
+        "Incomplete",
+        NA,
         "Incomplete",
         NA,
         "Incomplete"
