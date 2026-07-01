@@ -24,7 +24,6 @@
 #' @importFrom tidyr pivot_longer pivot_wider
 #' @importFrom tidyselect all_of any_of ends_with eval_select everything
 #' starts_with
-#' @importFrom utils read.csv
 "_PACKAGE"
 
 ## usethis namespace: start

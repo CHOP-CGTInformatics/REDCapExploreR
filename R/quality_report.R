@@ -1,23 +1,12 @@
 #' @title Build a REDCap data quality report
 #'
 #' @description
-#' `build_quality_report()` normalizes raw REDCap data or a REDCapTidieR
-#' supertibble, applies general data quality heuristics, and returns findings,
-#' summaries, and interpreted metadata.
+#' `build_quality_report()` pulls a REDCap project through the API, applies
+#' general data quality heuristics, and returns findings, summaries, and
+#' interpreted metadata.
 #'
-#' @param data A raw REDCap data frame, path to a REDCap CSV export, REDCapTidieR
-#'   supertibble, or a list returned by `pull_redcap_project()`.
-#' @param metadata A REDCap metadata/data dictionary data frame or CSV path. This
-#'   is required for raw data unless `data` is a REDCapTidieR supertibble with
-#'   enough embedded metadata.
-#' @param events Optional REDCap events data frame or CSV path.
-#' @param instruments Optional REDCap instruments data frame or CSV path.
-#' @param repeating_instruments Optional REDCap repeating instruments/events data
-#'   frame or CSV path.
-#' @param redcap_uri REDCap API URI. Required when `source = "api"`.
-#' @param token REDCap API token. Required when `source = "api"`.
-#' @param source Input source type. Use `"auto"` to infer from supplied
-#'   arguments.
+#' @param redcap_uri REDCap API URI.
+#' @param token REDCap API token.
 #' @param checks Character vector of check groups to run.
 #' @param sparse_threshold Missingness threshold used to flag unexpectedly sparse
 #'   fields.
@@ -28,36 +17,23 @@
 #'   progress output.
 #'
 #' @returns A list with `findings`, `summaries`, and `metadata` elements.
-#'   `summaries$project$raw_row_count` is only present for raw REDCap inputs and
-#'   equals `nrow()` for the raw export. `summaries$project$supertbl_row_count`
-#'   is only present for REDCapTidieR supertibble inputs and equals the number of
-#'   rows after binding the instrument-level tibbles. `summaries$project$field_count`
-#'   is the count of distinct standardized metadata field names.
+#'   `findings` includes record, form, event, repeat instrument, and repeat
+#'   instance context when available from the REDCap export.
+#'   `summaries$project$raw_row_count` equals `nrow()` for the records returned
+#'   by the REDCap API. `summaries$project$field_count` is the count of distinct
+#'   standardized metadata field names.
 #'
 #' @examples
 #' \dontrun{
 #' report <- build_quality_report(
-#'   data = "redcap_export.csv",
-#'   metadata = "redcap_data_dictionary.csv"
-#' )
-#'
-#' supertbl <- REDCapTidieR::read_redcap(
 #'   redcap_uri = Sys.getenv("REDCAP_URI"),
 #'   token = Sys.getenv("REDCAP_TOKEN")
 #' )
-#'
-#' report <- build_quality_report(supertbl)
 #' }
 #'
 #' @export
-build_quality_report <- function(data = NULL,
-                                 metadata = NULL,
-                                 events = NULL,
-                                 instruments = NULL,
-                                 repeating_instruments = NULL,
-                                 redcap_uri = NULL,
-                                 token = NULL,
-                                 source = c("auto", "supertbl", "raw", "api"),
+build_quality_report <- function(redcap_uri,
+                                 token,
                                  checks = c(
                                    "missingness",
                                    "metadata",
@@ -68,7 +44,6 @@ build_quality_report <- function(data = NULL,
                                  sparse_threshold = 0.95,
                                  outlier_iqr_multiplier = 3,
                                  progress = c("auto", "none", "show")) {
-  source <- match.arg(source)
   progress <- match.arg(progress)
   checks <- match.arg(
     checks,
@@ -90,16 +65,14 @@ build_quality_report <- function(data = NULL,
   )
 
   get_validate_thresholds(sparse_threshold, outlier_iqr_multiplier)
+  if (missing(redcap_uri)) {
+    cli_abort("{.arg redcap_uri} and {.arg token} are required.")
+  }
+  get_validate_api_credentials(redcap_uri, token)
 
   project <- get_quality_project(
-    data = data,
-    metadata = metadata,
-    events = events,
-    instruments = instruments,
-    repeating_instruments = repeating_instruments,
     redcap_uri = redcap_uri,
-    token = token,
-    source = source
+    token = token
   )
   update_report_progress(progress_bar, progress_enabled, progress_force, "Normalized input")
 
@@ -129,6 +102,7 @@ build_quality_report <- function(data = NULL,
     findings <- get_empty_findings()
   } else {
     findings <- findings |>
+      get_standard_findings() |>
       mutate(finding_id = row_number()) |>
       relocate("finding_id")
   }
@@ -181,12 +155,18 @@ build_quality_report <- function(data = NULL,
 #'
 #' @export
 pull_redcap_project <- function(redcap_uri, token) {
-  if (missing(redcap_uri) || missing(token) || redcap_uri == "" || token == "") {
-    cli_abort("{.arg redcap_uri} and {.arg token} are required for API pulls.")
-  }
+  get_validate_api_credentials(redcap_uri, token)
 
-  data_result <- redcap_read_oneshot(redcap_uri = redcap_uri, token = token)
-  metadata_result <- redcap_metadata_read(redcap_uri = redcap_uri, token = token)
+  data_result <- redcap_read_oneshot(
+    redcap_uri = redcap_uri,
+    token = token,
+    verbose = FALSE
+  )
+  metadata_result <- redcap_metadata_read(
+    redcap_uri = redcap_uri,
+    token = token,
+    verbose = FALSE
+  )
 
   list(
     data = get_redcapr_data(data_result, "records"),
@@ -226,6 +206,23 @@ get_progress_enabled <- function(progress) {
 
 get_report_progress_steps <- function(checks) {
   length(checks) + 5L
+}
+
+get_validate_api_credentials <- function(redcap_uri, token) {
+  invalid_credentials <- missing(redcap_uri) ||
+    missing(token) ||
+    length(redcap_uri) != 1 ||
+    length(token) != 1 ||
+    is.na(redcap_uri) ||
+    is.na(token) ||
+    redcap_uri == "" ||
+    token == ""
+
+  if (invalid_credentials) {
+    cli_abort("{.arg redcap_uri} and {.arg token} are required.")
+  }
+
+  invisible(NULL)
 }
 
 get_progress_bar <- function(enabled, total_steps) {
@@ -276,89 +273,29 @@ close_report_progress <- function(progress_bar, enabled) {
   invisible(NULL)
 }
 
-get_quality_project <- function(data,
-                                metadata,
-                                events,
-                                instruments,
-                                repeating_instruments,
-                                redcap_uri,
-                                token,
-                                source) {
-  if (source == "api" || (source == "auto" && !is.null(redcap_uri))) {
-    pulled <- pull_redcap_project(redcap_uri = redcap_uri, token = token)
-    return(get_quality_project(
-      data = pulled,
-      metadata = NULL,
-      events = NULL,
-      instruments = NULL,
-      repeating_instruments = NULL,
-      redcap_uri = NULL,
-      token = NULL,
-      source = "raw"
-    ))
-  }
-
-  if (source == "auto") {
-    source <- get_inferred_source(data)
-  }
-
-  if (source == "supertbl") {
-    out <- get_supertbl_project(data, metadata)
-  } else {
-    out <- get_raw_project(
-      data = data,
-      metadata = metadata,
-      events = events,
-      instruments = instruments,
-      repeating_instruments = repeating_instruments
-    )
-  }
+get_quality_project <- function(redcap_uri, token) {
+  out <- get_api_project(pull_redcap_project(
+    redcap_uri = redcap_uri,
+    token = token
+  ))
 
   out$record_id_field <- get_record_id_field_report(out$data, out$metadata)
   out
 }
 
-get_inferred_source <- function(data) {
-  if (is_redcap_project_list(data)) {
-    return("raw")
-  }
-
-  if (is.data.frame(data) && all(c("redcap_form_name", "redcap_data") %in% names(data))) {
-    return("supertbl")
-  }
-
-  "raw"
-}
-
-get_raw_project <- function(data,
-                            metadata,
-                            events = NULL,
-                            instruments = NULL,
-                            repeating_instruments = NULL) {
-  if (is_redcap_project_list(data)) {
-    metadata <- data$metadata
-    events <- data$events
-    instruments <- data$instruments
-    repeating_instruments <- data$repeating_instruments
-    data <- data$data
-  }
-
-  if (is.null(data)) {
-    cli_abort("{.arg data} is required.")
-  }
-
-  if (is.null(metadata)) {
-    cli_abort("{.arg metadata} is required for raw REDCap data.")
+get_api_project <- function(project) {
+  if (!is.list(project) || is.data.frame(project) || !all(c("data", "metadata") %in% names(project))) {
+    cli_abort("The REDCap API pull must return {.field data} and {.field metadata} tables.")
   }
 
   out <- list(
-    data = as_tibble(get_input_table(data)),
-    metadata = get_standard_metadata(metadata),
-    events = as_tibble(get_optional_table(events)),
-    instruments = as_tibble(get_optional_table(instruments)),
-    repeating_instruments = as_tibble(get_optional_table(repeating_instruments)),
+    data = get_required_api_table(project$data, "records"),
+    metadata = get_standard_metadata(project$metadata),
+    events = get_standard_events(project$events),
+    instruments = get_optional_api_table(project$instruments),
+    repeating_instruments = get_optional_api_table(project$repeating_instruments),
     instrument_structure = tibble(),
-    source = "raw"
+    source = "api"
   )
 
   out <- get_drop_descriptive_fields(out)
@@ -382,303 +319,49 @@ get_drop_descriptive_fields <- function(project) {
   project
 }
 
-get_supertbl_project <- function(supertbl, metadata = NULL) {
-  if (!is.data.frame(supertbl) || !"redcap_data" %in% names(supertbl)) {
-    cli_abort("{.arg data} must be a REDCapTidieR supertibble.")
-  }
-
-  data_tbls <- map2(
-    supertbl$redcap_data,
-    seq_along(supertbl$redcap_data),
-    \(tbl, index) {
-      form_name <- supertbl$redcap_form_name[[index]]
-      tbl <- as_tibble(tbl)
-      if (!"redcap_form_name" %in% names(tbl)) {
-        tbl$redcap_form_name <- form_name
-      }
-      if (!"redcap_form_label" %in% names(tbl) && "redcap_form_label" %in% names(supertbl)) {
-        tbl$redcap_form_label <- supertbl$redcap_form_label[[index]]
-      }
-      tbl
-    }
-  )
-
-  events <- get_supertbl_nested_table(supertbl, "redcap_events") |>
-    get_canonical_event_data()
-
-  data <- bind_rows(data_tbls) |>
-    get_canonical_checkbox_data() |>
-    get_canonical_event_data(events)
-
-  metadata_tbl <- if (!is.null(metadata)) {
-    get_standard_metadata(metadata)
-  } else if ("redcap_metadata" %in% names(supertbl)) {
-    get_supertbl_metadata(supertbl)
-  } else {
-    get_inferred_supertbl_metadata(supertbl, data)
-  }
-  metadata_tbl <- metadata_tbl |>
-    get_canonical_checkbox_metadata() |>
-    get_deduplicated_metadata()
-
-  out <- list(
-    data = data,
-    metadata = metadata_tbl,
-    events = events,
-    instruments = tibble(),
-    repeating_instruments = get_supertbl_nested_table(supertbl, "redcap_repeating_instruments"),
-    instrument_structure = get_supertbl_instrument_structure(supertbl),
-    source = "supertbl"
-  )
-
-  get_validate_project(out)
-}
-
-get_supertbl_metadata <- function(supertbl) {
-  metadata <- bind_rows(map2(
-    supertbl$redcap_metadata,
-    seq_along(supertbl$redcap_metadata),
-    \(tbl, index) {
-      tbl <- as_tibble(tbl)
-      if (!"form_name" %in% names(tbl)) {
-        tbl$form_name <- supertbl$redcap_form_name[[index]]
-      } else {
-        tbl$form_name[get_is_missing(tbl$form_name)] <- supertbl$redcap_form_name[[index]]
-      }
-      if (!"form_label" %in% names(tbl) && "redcap_form_label" %in% names(supertbl)) {
-        tbl$form_label <- supertbl$redcap_form_label[[index]]
-      }
-      tbl
-    }
-  ))
-
-  metadata |>
-    get_standard_metadata()
-}
-
-get_canonical_checkbox_metadata <- function(metadata) {
-  checkbox_rows <- str_detect(metadata$field_name, "___")
-  if (!any(checkbox_rows)) {
-    return(metadata)
-  }
-
-  metadata |>
-    mutate(
-      .is_checkbox_choice = checkbox_rows,
-      .checkbox_parent_field = if_else(
-        .data$.is_checkbox_choice,
-        sub("___.*$", "", .data$field_name),
-        .data$field_name
-      )
-    ) |>
-    group_by(.data$.checkbox_parent_field) |>
-    mutate(
-      field_name = if_else(.data$.is_checkbox_choice, .data$.checkbox_parent_field, .data$field_name),
-      field_type = if_else(.data$.is_checkbox_choice, "checkbox", .data$field_type),
-      field_label = if_else(
-        .data$.is_checkbox_choice,
-        get_checkbox_parent_label(.data$field_label),
-        .data$field_label
-      )
-    ) |>
-    ungroup() |>
-    select(-".is_checkbox_choice", -".checkbox_parent_field")
-}
-
-get_checkbox_parent_label <- function(field_label) {
-  labels <- unique(field_label[!get_is_missing(field_label)])
-  if (length(labels) == 0) {
-    return(NA_character_)
-  }
-
-  colon_prefix <- sub("^(.*?:)\\s+.+$", "\\1", labels)
-  if (length(unique(colon_prefix)) == 1 && colon_prefix[[1]] != labels[[1]]) {
-    return(colon_prefix[[1]])
-  }
-
-  labels[[1]]
-}
-
-get_deduplicated_metadata <- function(metadata) {
-  metadata |>
-    distinct(.data$field_name, .keep_all = TRUE)
-}
-
-get_supertbl_nested_table <- function(supertbl, column) {
-  if (!column %in% names(supertbl)) {
-    return(tibble())
-  }
-
-  bind_rows(map2(
-    supertbl[[column]],
-    supertbl$redcap_form_name,
-    \(tbl, form_name) {
-      tbl <- as_tibble(tbl)
-      if (!"redcap_form_name" %in% names(tbl)) {
-        tbl$redcap_form_name <- form_name
-      }
-      tbl
-    }
-  ))
-}
-
-get_canonical_checkbox_data <- function(data) {
-  checkbox_columns <- names(data)[str_detect(names(data), "___")]
-  if (length(checkbox_columns) == 0) {
-    return(data)
-  }
-
-  canonical_columns <- unique(sub("(_raw|_label)$", "", checkbox_columns))
-
-  for (column in canonical_columns) {
-    raw_column <- paste0(column, "_raw")
-    label_column <- paste0(column, "_label")
-
-    data[[column]] <- if (raw_column %in% names(data)) {
-      get_checkbox_indicator(data[[raw_column]])
-    } else if (column %in% names(data)) {
-      get_checkbox_indicator(data[[column]])
-    } else if (label_column %in% names(data)) {
-      if_else(get_is_missing(data[[label_column]]), 0L, 1L)
-    } else {
-      data[[column]]
-    }
-  }
-
-  helper_columns <- names(data)[
-    str_detect(names(data), "___") &
-      str_detect(names(data), "(_raw|_label)$")
-  ]
-  data |>
-    select(-any_of(helper_columns))
-}
-
-get_checkbox_indicator <- function(value) {
-  if_else(get_is_checked(value), 1L, 0L)
-}
-
-get_canonical_event_data <- function(data, events = NULL) {
-  data <- get_fill_event_arm(data, events)
-
-  if (!all(c("redcap_event", "redcap_arm") %in% names(data))) {
-    return(data)
-  }
-
-  data |>
-    mutate(
-      redcap_event_name = get_canonical_event_name(
-        .data$redcap_event,
-        .data$redcap_arm
-      )
-    )
-}
-
-get_fill_event_arm <- function(data, events) {
-  if (
-    "redcap_arm" %in% names(data) ||
-      !"redcap_event" %in% names(data) ||
-      is.null(events) ||
-      !all(c("redcap_event", "redcap_arm") %in% names(events))
-  ) {
-    return(data)
-  }
-
-  join_fields <- "redcap_event"
-  if ("redcap_form_name" %in% names(data) && "redcap_form_name" %in% names(events)) {
-    join_fields <- c("redcap_form_name", join_fields)
-  }
-
-  event_arms <- events |>
-    filter(!get_is_missing(.data$redcap_arm)) |>
-    group_by(across(all_of(join_fields))) |>
-    filter(n_distinct(.data$redcap_arm) == 1) |>
-    summarise(redcap_arm = first(.data$redcap_arm), .groups = "drop")
-
-  if (nrow(event_arms) == 0) {
-    return(data)
-  }
-
-  data |>
-    left_join(event_arms, by = join_fields)
-}
-
-get_canonical_event_name <- function(event, arm) {
-  event <- as.character(event)
-  arm <- as.character(arm)
-  arm_number <- sub("^arm_", "", tolower(arm))
-
-  case_when(
-    get_is_missing(event) ~ NA_character_,
-    str_detect(event, "_arm_[0-9]+$") ~ event,
-    get_is_missing(arm_number) ~ event,
-    TRUE ~ paste0(event, "_arm_", arm_number)
-  )
-}
-
-get_supertbl_instrument_structure <- function(supertbl) {
-  if (!"structure" %in% names(supertbl)) {
-    return(tibble())
-  }
-
-  tibble(
-    redcap_form_name = supertbl$redcap_form_name,
-    structure = as.character(supertbl$structure)
-  )
-}
-
-get_inferred_supertbl_metadata <- function(supertbl, data) {
-  form_labels <- if ("redcap_form_label" %in% names(supertbl)) {
-    supertbl$redcap_form_label
-  } else {
-    supertbl$redcap_form_name
-  }
-
-  bind_rows(map2(
-    supertbl$redcap_data,
-    seq_along(supertbl$redcap_data),
-    \(tbl, index) {
-      names <- setdiff(names(tbl), c("redcap_form_name", "redcap_form_label"))
-      tibble(
-        field_name = names,
-        form_name = supertbl$redcap_form_name[[index]],
-        field_type = NA_character_,
-        field_label = names,
-        select_choices_or_calculations = NA_character_,
-        text_validation_type_or_show_slider_number = NA_character_,
-        text_validation_min = NA_character_,
-        text_validation_max = NA_character_,
-        required_field = FALSE,
-        branching_logic = NA_character_,
-        identifier = NA_character_,
-        form_label = form_labels[[index]]
-      )
-    }
-  )) |>
-    distinct(.data$field_name, .data$form_name, .keep_all = TRUE)
-}
-
-get_input_table <- function(x) {
-  if (is.character(x) && length(x) == 1 && file.exists(x)) {
-    return(read.csv(x, stringsAsFactors = FALSE, check.names = FALSE))
-  }
-
+get_required_api_table <- function(x, label) {
   if (is.data.frame(x)) {
-    return(x)
+    return(as_tibble(x))
   }
 
-  cli_abort("{.arg data} must be a data frame, CSV path, REDCapTidieR supertibble, or API pull list.")
+  cli_abort("The REDCap API {label} response must be a data frame.")
 }
 
-get_optional_table <- function(x) {
+get_optional_api_table <- function(x) {
   if (is.null(x)) {
     return(tibble())
   }
 
-  get_input_table(x)
+  if (is.data.frame(x)) {
+    return(as_tibble(x))
+  }
+
+  cli_abort("Optional REDCap API metadata must be a data frame.")
+}
+
+get_standard_events <- function(events) {
+  events <- get_optional_api_table(events)
+  if (nrow(events) == 0 && ncol(events) == 0) {
+    return(events)
+  }
+
+  names(events) <- get_clean_names(names(events))
+
+  if (!"redcap_event_name" %in% names(events) && "unique_event_name" %in% names(events)) {
+    events <- events |>
+      mutate(redcap_event_name = as.character(.data$unique_event_name))
+  }
+
+  if (!"redcap_arm" %in% names(events) && "arm_num" %in% names(events)) {
+    events <- events |>
+      mutate(redcap_arm = as.character(.data$arm_num))
+  }
+
+  events
 }
 
 get_standard_metadata <- function(metadata) {
-  metadata <- as_tibble(get_input_table(metadata))
+  metadata <- get_required_api_table(metadata, "metadata")
   names(metadata) <- get_clean_names(names(metadata))
   names(metadata) <- get_metadata_names(names(metadata))
 
@@ -833,11 +516,7 @@ get_field_summary <- function(project) {
 }
 
 get_field_rows <- function(project, form_name) {
-  if (project$source == "supertbl" && "redcap_form_name" %in% names(project$data)) {
-    return(as.character(project$data$redcap_form_name) == as.character(form_name))
-  }
-
-  if (project$source == "raw" && "redcap_repeat_instrument" %in% names(project$data)) {
+  if ("redcap_repeat_instrument" %in% names(project$data)) {
     repeat_instrument <- as.character(project$data$redcap_repeat_instrument)
     repeated_rows <- !get_is_missing(repeat_instrument)
     form_repeat_rows <- repeated_rows & repeat_instrument == as.character(form_name)
@@ -879,6 +558,8 @@ get_missingness_findings <- function(project, field_summary, sparse_threshold) {
       record_id = as.character(project$data[[project$record_id_field]][missing]),
       form_name = metadata_row$form_name,
       event_name = get_event_values(project$data, missing),
+      repeat_instrument = get_repeat_instrument_values(project$data, missing),
+      repeat_instance = get_repeat_instance_values(project$data, missing),
       field_name = field,
       value = NA_character_,
       expected = "Non-missing value",
@@ -1066,6 +747,8 @@ get_range_findings <- function(project) {
       record_id = as.character(project$data[[project$record_id_field]][bad]),
       form_name = metadata$form_name[[index]],
       event_name = get_event_values(project$data, bad),
+      repeat_instrument = get_repeat_instrument_values(project$data, bad),
+      repeat_instance = get_repeat_instance_values(project$data, bad),
       field_name = field,
       value = as.character(project$data[[field]][bad]),
       expected = paste("Between", min_value, "and", max_value),
@@ -1110,6 +793,8 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
       record_id = as.character(project$data[[project$record_id_field]][outlier]),
       form_name = metadata_row$form_name,
       event_name = get_event_values(project$data, outlier),
+      repeat_instrument = get_repeat_instrument_values(project$data, outlier),
+      repeat_instance = get_repeat_instance_values(project$data, outlier),
       field_name = field,
       value = as.character(project$data[[field]][outlier]),
       expected = paste("Between", round(lower, 4), "and", round(upper, 4)),
@@ -1145,6 +830,8 @@ get_future_date_findings <- function(project) {
       record_id = as.character(project$data[[project$record_id_field]][future]),
       form_name = date_fields$form_name[[index]],
       event_name = get_event_values(project$data, future),
+      repeat_instrument = get_repeat_instrument_values(project$data, future),
+      repeat_instance = get_repeat_instance_values(project$data, future),
       field_name = field,
       value = as.character(project$data[[field]][future]),
       expected = paste("On or before", Sys.Date()),
@@ -1175,6 +862,8 @@ get_operational_findings <- function(project) {
       record_id = .data$record_id,
       form_name = .data$form_name,
       event_name = .data$event_name,
+      repeat_instrument = .data$repeat_instrument,
+      repeat_instance = .data$repeat_instance,
       field_name = .data$field_name,
       value = .data$value,
       expected = "Complete",
@@ -1183,13 +872,7 @@ get_operational_findings <- function(project) {
 }
 
 get_completion_status <- function(project) {
-  completion_status <- if (project$source == "supertbl") {
-    get_supertbl_completion_status(project)
-  } else {
-    get_raw_completion_status(project)
-  }
-
-  completion_status |>
+  get_raw_completion_status(project) |>
     mutate(value = get_completion_status_value(.data$value))
 }
 
@@ -1223,221 +906,12 @@ get_raw_completion_status <- function(project) {
       record_id = as.character(project$data[[project$record_id_field]][form_rows]),
       form_name = form_name,
       event_name = get_event_values(project$data, form_rows),
+      repeat_instrument = get_repeat_instrument_values(project$data, form_rows),
+      repeat_instance = get_repeat_instance_values(project$data, form_rows),
       field_name = field,
       value = as.character(project$data[[field]][form_rows])
     )
   }))
-}
-
-get_supertbl_completion_status <- function(project) {
-  if (!"form_status_complete" %in% names(project$data)) {
-    return(get_empty_completion_status())
-  }
-
-  form_name <- as.character(project$data$redcap_form_name)
-  observed <- tibble(
-    record_id = as.character(project$data[[project$record_id_field]]),
-    form_name = form_name,
-    event_name = get_event_values(project$data, rep(TRUE, nrow(project$data))),
-    field_name = paste0(form_name, "_complete"),
-    value = as.character(project$data$form_status_complete)
-  )
-
-  expected <- get_expected_supertbl_completion_status(project)
-  if (nrow(expected) > 0) {
-    nonrepeating_forms <- unique(expected$form_name)
-    observed_nonrepeating <- observed |>
-      filter(.data$form_name %in% nonrepeating_forms)
-
-    nonrepeating_status <- expected |>
-      left_join(
-        observed_nonrepeating |>
-          rename(.observed_value = "value"),
-        by = c("record_id", "event_name", "form_name", "field_name")
-      ) |>
-      mutate(value = if_else(
-        get_is_missing(.data$.observed_value),
-        .data$value,
-        .data$.observed_value
-      )) |>
-      select("record_id", "form_name", "event_name", "field_name", "value")
-
-    return(get_ordered_supertbl_completion_status(
-      project = project,
-      observed = observed,
-      expected = nonrepeating_status
-    ))
-  }
-
-  observed
-}
-
-get_ordered_supertbl_completion_status <- function(project, observed, expected) {
-  form_order <- get_completion_form_order(project, observed, expected)
-
-  bind_rows(map(form_order, \(form_name) {
-    current_form <- form_name
-    if (current_form %in% expected$form_name) {
-      return(expected |> filter(.data$form_name == current_form))
-    }
-
-    observed |> filter(.data$form_name == current_form)
-  }))
-}
-
-get_completion_form_order <- function(project, observed, expected) {
-  structure_forms <- if ("redcap_form_name" %in% names(project$instrument_structure)) {
-    as.character(project$instrument_structure$redcap_form_name)
-  } else {
-    character()
-  }
-
-  form_order <- unique(c(
-    as.character(project$metadata$form_name),
-    structure_forms,
-    as.character(expected$form_name),
-    as.character(observed$form_name)
-  ))
-
-  form_order[!get_is_missing(form_order)]
-}
-
-get_expected_supertbl_completion_status <- function(project) {
-  nonrepeating_forms <- get_supertbl_nonrepeating_forms(project)
-  if (length(nonrepeating_forms) == 0 || nrow(project$data) == 0) {
-    return(get_empty_completion_status())
-  }
-
-  event_field <- get_event_field(project$data)
-  record_events <- if (is.na(event_field)) {
-    record_event_data <- project$data |>
-      filter(.data$redcap_form_name %in% nonrepeating_forms)
-
-    tibble(
-      record_id = as.character(record_event_data[[project$record_id_field]]),
-      event_name = NA_character_
-    )
-  } else {
-    get_expected_supertbl_record_events(project, event_field)
-  }
-
-  record_events <- record_events |>
-    distinct() |>
-    get_ordered_record_events(project)
-
-  bind_rows(map(nonrepeating_forms, \(form_name) {
-    current_form <- form_name
-    record_events |>
-      mutate(
-        form_name = current_form,
-        field_name = paste0(current_form, "_complete"),
-        value = get_expected_completion_value(project, current_form, .data$event_name)
-      )
-  }))
-}
-
-get_expected_supertbl_record_events <- function(project, event_field) {
-  if (
-    nrow(project$events) > 0 &&
-      all(c("redcap_event_name", "redcap_arm") %in% names(project$events)) &&
-      "redcap_arm" %in% names(project$data)
-  ) {
-    record_arms <- project$data |>
-      transmute(
-        record_id = as.character(.data[[project$record_id_field]]),
-        redcap_arm = as.character(.data$redcap_arm)
-      ) |>
-      filter(!get_is_missing(.data$record_id), !get_is_missing(.data$redcap_arm)) |>
-      distinct()
-
-    event_arms <- project$events |>
-      transmute(
-        event_name = as.character(.data$redcap_event_name),
-        redcap_arm = as.character(.data$redcap_arm)
-      ) |>
-      filter(!get_is_missing(.data$event_name), !get_is_missing(.data$redcap_arm)) |>
-      distinct()
-
-    if (nrow(record_arms) > 0 && nrow(event_arms) > 0) {
-      return(record_arms |>
-        left_join(event_arms, by = "redcap_arm", relationship = "many-to-many") |>
-        select("record_id", "event_name"))
-    }
-  }
-
-  tibble(
-    record_id = as.character(project$data[[project$record_id_field]]),
-    event_name = as.character(project$data[[event_field]])
-  )
-}
-
-get_supertbl_nonrepeating_forms <- function(project) {
-  forms <- unique(as.character(project$data$redcap_form_name))
-
-  forms[map_lgl(forms, \(form_name) {
-    structure <- NA_character_
-    if (all(c("redcap_form_name", "structure") %in% names(project$instrument_structure))) {
-      structure <- project$instrument_structure |>
-        filter(.data$redcap_form_name == form_name) |>
-        pull(.data$structure) |>
-        first()
-    }
-
-    if (!is.na(structure)) {
-      return(tolower(structure) != "repeating")
-    }
-
-    repeat_instances <- if ("redcap_repeat_instance" %in% names(project$data)) {
-      project$data$redcap_repeat_instance[
-        as.character(project$data$redcap_form_name) == form_name
-      ]
-    } else {
-      NA_character_
-    }
-    !any(!get_is_missing(repeat_instances))
-  })]
-}
-
-get_expected_completion_value <- function(project, form_name, event_name) {
-  if (
-    nrow(project$events) == 0 ||
-      !all(c("redcap_form_name", "redcap_event_name") %in% names(project$events))
-  ) {
-    return(rep(NA_character_, length(event_name)))
-  }
-
-  enabled_events <- project$events |>
-    filter(.data$redcap_form_name == form_name) |>
-    pull(.data$redcap_event_name) |>
-    unique()
-
-  if_else(event_name %in% enabled_events, "Incomplete", NA_character_)
-}
-
-get_ordered_record_events <- function(record_events, project) {
-  event_order <- get_event_order(project, record_events$event_name)
-
-  record_events |>
-    mutate(
-      .record_number = suppressWarnings(as.numeric(.data$record_id)),
-      .event_order = match(.data$event_name, event_order)
-    ) |>
-    arrange(
-      is.na(.data$.record_number),
-      .data$.record_number,
-      .data$record_id,
-      .data$.event_order,
-      .data$event_name
-    ) |>
-    select(-".record_number", -".event_order")
-}
-
-get_event_order <- function(project, event_name) {
-  if ("redcap_event_name" %in% names(project$events)) {
-    return(unique(as.character(project$events$redcap_event_name)))
-  }
-
-  unique(event_name)
 }
 
 get_empty_completion_status <- function() {
@@ -1445,6 +919,8 @@ get_empty_completion_status <- function() {
     record_id = character(),
     form_name = character(),
     event_name = character(),
+    repeat_instrument = character(),
+    repeat_instance = character(),
     field_name = character(),
     value = character()
   )
@@ -1486,6 +962,8 @@ get_consistency_findings <- function(project) {
       record_id = as.character(project$data[[project$record_id_field]][contradiction]),
       form_name = metadata_row$form_name,
       event_name = get_event_values(project$data, contradiction),
+      repeat_instrument = get_repeat_instrument_values(project$data, contradiction),
+      repeat_instance = get_repeat_instance_values(project$data, contradiction),
       field_name = field,
       value = paste(none_columns, collapse = ", "),
       expected = "None option not selected with other options",
@@ -1506,29 +984,30 @@ get_project_summary <- function(project, findings, field_summary) {
     finding_count = nrow(findings)
   )
 
-  if (project$source == "raw") {
-    summary <- summary |>
-      mutate(raw_row_count = nrow(project$data), .after = "record_count")
-  } else if (project$source == "supertbl") {
-    summary <- summary |>
-      mutate(supertbl_row_count = nrow(project$data), .after = "record_count")
-  }
-
-  summary
+  summary |>
+    mutate(raw_row_count = nrow(project$data), .after = "record_count")
 }
 
 get_project_event_count <- function(project) {
+  event_field <- get_event_field(project$data)
+  if (!is.na(event_field)) {
+    return(n_distinct(project$data[[event_field]]))
+  }
+
   if (nrow(project$events) > 0) {
-    event_columns <- intersect(c("redcap_event", "redcap_event_name", "redcap_arm", "arm_name"), names(project$events))
+    event_columns <- intersect(
+      c("redcap_event_name", "unique_event_name", "redcap_event", "redcap_arm", "arm_num", "arm_name"),
+      names(project$events)
+    )
+
+    if (length(event_columns) == 0) {
+      return(nrow(project$events))
+    }
+
     return(nrow(distinct(project$events, across(all_of(event_columns)))))
   }
 
-  event_field <- get_event_field(project$data)
-  if (is.na(event_field)) {
-    return(NA_integer_)
-  }
-
-  n_distinct(project$data[[event_field]])
+  NA_integer_
 }
 
 get_repeating_enabled <- function(project) {
@@ -1679,13 +1158,12 @@ get_redcapr_data <- function(result, label) {
 
 get_optional_redcapr_data <- function(fun, redcap_uri, token) {
   tryCatch(
-    get_redcapr_data(fun(redcap_uri = redcap_uri, token = token), "optional metadata"),
+    get_redcapr_data(
+      fun(redcap_uri = redcap_uri, token = token, verbose = FALSE),
+      "optional metadata"
+    ),
     error = function(cnd) tibble()
   )
-}
-
-is_redcap_project_list <- function(x) {
-  is.list(x) && !is.data.frame(x) && all(c("data", "metadata") %in% names(x))
 }
 
 get_metadata_row <- function(project, field) {
@@ -1734,6 +1212,22 @@ get_event_field <- function(data) {
   NA_character_
 }
 
+get_repeat_instrument_values <- function(data, rows) {
+  if (!"redcap_repeat_instrument" %in% names(data)) {
+    return(rep(NA_character_, sum(rows)))
+  }
+
+  as.character(data$redcap_repeat_instrument[rows])
+}
+
+get_repeat_instance_values <- function(data, rows) {
+  if (!"redcap_repeat_instance" %in% names(data)) {
+    return(rep(NA_character_, sum(rows)))
+  }
+
+  as.character(data$redcap_repeat_instance[rows])
+}
+
 get_is_numeric_field <- function(project, field) {
   value <- project$data[[field]]
   metadata_row <- get_metadata_row(project, field)
@@ -1763,16 +1257,34 @@ get_branching_references <- function(logic) {
 get_empty_findings <- function() {
   tibble(
     finding_id = integer(),
-    check = character(),
-    issue = character(),
-    severity = character(),
-    scope = character(),
-    record_id = character(),
-    form_name = character(),
-    event_name = character(),
-    field_name = character(),
-    value = character(),
-    expected = character(),
-    message = character()
+    !!!setNames(rep(list(character()), length(get_finding_columns())), get_finding_columns())
+  )
+}
+
+get_standard_findings <- function(findings) {
+  missing_columns <- setdiff(get_finding_columns(), names(findings))
+  for (column in missing_columns) {
+    findings[[column]] <- NA_character_
+  }
+
+  findings |>
+    select(all_of(get_finding_columns()))
+}
+
+get_finding_columns <- function() {
+  c(
+    "check",
+    "issue",
+    "severity",
+    "scope",
+    "record_id",
+    "form_name",
+    "event_name",
+    "repeat_instrument",
+    "repeat_instance",
+    "field_name",
+    "value",
+    "expected",
+    "message"
   )
 }

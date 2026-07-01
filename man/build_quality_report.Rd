@@ -5,14 +5,8 @@
 \title{Build a REDCap data quality report}
 \usage{
 build_quality_report(
-  data = NULL,
-  metadata = NULL,
-  events = NULL,
-  instruments = NULL,
-  repeating_instruments = NULL,
-  redcap_uri = NULL,
-  token = NULL,
-  source = c("auto", "supertbl", "raw", "api"),
+  redcap_uri,
+  token,
   checks = c("missingness", "metadata", "outliers", "operational", "consistency"),
   sparse_threshold = 0.95,
   outlier_iqr_multiplier = 3,
@@ -20,26 +14,9 @@ build_quality_report(
 )
 }
 \arguments{
-\item{data}{A raw REDCap data frame, path to a REDCap CSV export, REDCapTidieR
-supertibble, or a list returned by \code{pull_redcap_project()}.}
+\item{redcap_uri}{REDCap API URI.}
 
-\item{metadata}{A REDCap metadata/data dictionary data frame or CSV path. This
-is required for raw data unless \code{data} is a REDCapTidieR supertibble with
-enough embedded metadata.}
-
-\item{events}{Optional REDCap events data frame or CSV path.}
-
-\item{instruments}{Optional REDCap instruments data frame or CSV path.}
-
-\item{repeating_instruments}{Optional REDCap repeating instruments/events data
-frame or CSV path.}
-
-\item{redcap_uri}{REDCap API URI. Required when \code{source = "api"}.}
-
-\item{token}{REDCap API token. Required when \code{source = "api"}.}
-
-\item{source}{Input source type. Use \code{"auto"} to infer from supplied
-arguments.}
+\item{token}{REDCap API token.}
 
 \item{checks}{Character vector of check groups to run.}
 
@@ -55,30 +32,23 @@ progress output.}
 }
 \value{
 A list with \code{findings}, \code{summaries}, and \code{metadata} elements.
-\code{summaries$project$raw_row_count} is only present for raw REDCap inputs and
-equals \code{nrow()} for the raw export. \code{summaries$project$supertbl_row_count}
-is only present for REDCapTidieR supertibble inputs and equals the number of
-rows after binding the instrument-level tibbles. \code{summaries$project$field_count}
-is the count of distinct standardized metadata field names.
+\code{findings} includes record, form, event, repeat instrument, and repeat
+instance context when available from the REDCap export.
+\code{summaries$project$raw_row_count} equals \code{nrow()} for the records returned
+by the REDCap API. \code{summaries$project$field_count} is the count of distinct
+standardized metadata field names.
 }
 \description{
-\code{build_quality_report()} normalizes raw REDCap data or a REDCapTidieR
-supertibble, applies general data quality heuristics, and returns findings,
-summaries, and interpreted metadata.
+\code{build_quality_report()} pulls a REDCap project through the API, applies
+general data quality heuristics, and returns findings, summaries, and
+interpreted metadata.
 }
 \examples{
 \dontrun{
 report <- build_quality_report(
-  data = "redcap_export.csv",
-  metadata = "redcap_data_dictionary.csv"
-)
-
-supertbl <- REDCapTidieR::read_redcap(
   redcap_uri = Sys.getenv("REDCAP_URI"),
   token = Sys.getenv("REDCAP_TOKEN")
 )
-
-report <- build_quality_report(supertbl)
 }
 
 }
