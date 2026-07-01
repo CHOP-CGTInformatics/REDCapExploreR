@@ -181,7 +181,7 @@ combine_data <- function(data,
 
   if (!has_arms) {
     out %>%
-      dplyr::arrange(record_id_field, .data$redcap_form_label)
+      arrange(record_id_field, .data$redcap_form_label)
   } else {
     out %>%
       mutate(
@@ -189,12 +189,12 @@ combine_data <- function(data,
                                    levels = levels(instrument_order))
       ) %>%
       mutate(
-        redcap_event_label = purrr::map_chr(.data$redcap_event,
-                                            ~ get_event_name(.x, linked_arms = linked_arms)),
+        redcap_event_label = map_chr(.data$redcap_event,
+                                     ~ get_event_name(.x, linked_arms = linked_arms)),
         redcap_event_label = factor(.data$redcap_event_label,
                                     levels = event_order)
       ) |>
-      dplyr::arrange(record_id_field, .data$redcap_event_label)
+      arrange(record_id_field, .data$redcap_event_label)
   }
 }
 
@@ -239,7 +239,7 @@ reshape_data <- function(data, record_id_field) {
     )
 
   out <- pivoted_data %>%
-    tidyr::pivot_longer(
+    pivot_longer(
       cols = -record_id_field, # All columns except infseq_id
       names_to = "form_name", # New column to store the names of the variables
       values_to = "pct_complete" # New column to store the values

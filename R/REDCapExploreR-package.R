@@ -17,6 +17,7 @@
 #' eval_tidy get_env global_env is_atomic is_bare_formula is_bare_list quo_name
 #' is_installed new_environment quo_get_expr try_fetch zap as_label sym syms expr
 #' :=
+#' @importFrom stats IQR quantile
 #' @importFrom stringr str_detect str_replace str_replace_all str_squish str_trunc
 #' str_trim str_ends
 #' @importFrom tibble as_tibble tibble

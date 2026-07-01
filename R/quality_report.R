@@ -403,8 +403,12 @@ get_supertbl_project <- function(supertbl, metadata = NULL) {
     }
   )
 
+  events <- get_supertbl_nested_table(supertbl, "redcap_events") |>
+    get_canonical_event_data()
+
   data <- bind_rows(data_tbls) |>
-    get_canonical_checkbox_data()
+    get_canonical_checkbox_data() |>
+    get_canonical_event_data(events)
 
   metadata_tbl <- if (!is.null(metadata)) {
     get_standard_metadata(metadata)
@@ -420,7 +424,7 @@ get_supertbl_project <- function(supertbl, metadata = NULL) {
   out <- list(
     data = data,
     metadata = metadata_tbl,
-    events = get_supertbl_nested_table(supertbl, "redcap_events"),
+    events = events,
     instruments = tibble(),
     repeating_instruments = get_supertbl_nested_table(supertbl, "redcap_repeating_instruments"),
     instrument_structure = get_supertbl_instrument_structure(supertbl),
@@ -551,6 +555,64 @@ get_canonical_checkbox_data <- function(data) {
 
 get_checkbox_indicator <- function(value) {
   if_else(get_is_checked(value), 1L, 0L)
+}
+
+get_canonical_event_data <- function(data, events = NULL) {
+  data <- get_fill_event_arm(data, events)
+
+  if (!all(c("redcap_event", "redcap_arm") %in% names(data))) {
+    return(data)
+  }
+
+  data |>
+    mutate(
+      redcap_event_name = get_canonical_event_name(
+        .data$redcap_event,
+        .data$redcap_arm
+      )
+    )
+}
+
+get_fill_event_arm <- function(data, events) {
+  if (
+    "redcap_arm" %in% names(data) ||
+      !"redcap_event" %in% names(data) ||
+      is.null(events) ||
+      !all(c("redcap_event", "redcap_arm") %in% names(events))
+  ) {
+    return(data)
+  }
+
+  join_fields <- "redcap_event"
+  if ("redcap_form_name" %in% names(data) && "redcap_form_name" %in% names(events)) {
+    join_fields <- c("redcap_form_name", join_fields)
+  }
+
+  event_arms <- events |>
+    filter(!get_is_missing(.data$redcap_arm)) |>
+    group_by(across(all_of(join_fields))) |>
+    filter(n_distinct(.data$redcap_arm) == 1) |>
+    summarise(redcap_arm = first(.data$redcap_arm), .groups = "drop")
+
+  if (nrow(event_arms) == 0) {
+    return(data)
+  }
+
+  data |>
+    left_join(event_arms, by = join_fields)
+}
+
+get_canonical_event_name <- function(event, arm) {
+  event <- as.character(event)
+  arm <- as.character(arm)
+  arm_number <- sub("^arm_", "", tolower(arm))
+
+  case_when(
+    get_is_missing(event) ~ NA_character_,
+    str_detect(event, "_arm_[0-9]+$") ~ event,
+    get_is_missing(arm_number) ~ event,
+    TRUE ~ paste0(event, "_arm_", arm_number)
+  )
 }
 
 get_supertbl_instrument_structure <- function(supertbl) {
@@ -1025,12 +1087,12 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
 
     values <- suppressWarnings(as.numeric(project$data[[field]]))
     observed <- values[!is.na(values)]
-    if (length(observed) < 4 || stats::IQR(observed) == 0) {
+    if (length(observed) < 4 || IQR(observed) == 0) {
       return(get_empty_findings())
     }
 
-    quantiles <- stats::quantile(observed, probs = c(0.25, 0.75), names = FALSE)
-    iqr <- stats::IQR(observed)
+    quantiles <- quantile(observed, probs = c(0.25, 0.75), names = FALSE)
+    iqr <- IQR(observed)
     lower <- quantiles[[1]] - outlier_iqr_multiplier * iqr
     upper <- quantiles[[2]] + outlier_iqr_multiplier * iqr
     outlier <- !is.na(values) & (values < lower | values > upper)
@@ -1182,23 +1244,62 @@ get_supertbl_completion_status <- function(project) {
   )
 
   expected <- get_expected_supertbl_completion_status(project)
-  if (nrow(expected) == 0) {
-    return(observed)
+  if (nrow(expected) > 0) {
+    nonrepeating_forms <- unique(expected$form_name)
+    observed_nonrepeating <- observed |>
+      filter(.data$form_name %in% nonrepeating_forms)
+
+    nonrepeating_status <- expected |>
+      left_join(
+        observed_nonrepeating |>
+          rename(.observed_value = "value"),
+        by = c("record_id", "event_name", "form_name", "field_name")
+      ) |>
+      mutate(value = if_else(
+        get_is_missing(.data$.observed_value),
+        .data$value,
+        .data$.observed_value
+      )) |>
+      select("record_id", "form_name", "event_name", "field_name", "value")
+
+    return(get_ordered_supertbl_completion_status(
+      project = project,
+      observed = observed,
+      expected = nonrepeating_status
+    ))
   }
 
-  observed_keys <- observed |>
-    distinct(.data$record_id, .data$event_name, .data$form_name)
+  observed
+}
 
-  missing_expected <- expected |>
-    left_join(
-      observed_keys |>
-        mutate(.observed = TRUE),
-      by = c("record_id", "event_name", "form_name")
-    ) |>
-    filter(is.na(.data$.observed)) |>
-    select(-".observed")
+get_ordered_supertbl_completion_status <- function(project, observed, expected) {
+  form_order <- get_completion_form_order(project, observed, expected)
 
-  bind_rows(observed, missing_expected)
+  bind_rows(map(form_order, \(form_name) {
+    current_form <- form_name
+    if (current_form %in% expected$form_name) {
+      return(expected |> filter(.data$form_name == current_form))
+    }
+
+    observed |> filter(.data$form_name == current_form)
+  }))
+}
+
+get_completion_form_order <- function(project, observed, expected) {
+  structure_forms <- if ("redcap_form_name" %in% names(project$instrument_structure)) {
+    as.character(project$instrument_structure$redcap_form_name)
+  } else {
+    character()
+  }
+
+  form_order <- unique(c(
+    as.character(project$metadata$form_name),
+    structure_forms,
+    as.character(expected$form_name),
+    as.character(observed$form_name)
+  ))
+
+  form_order[!get_is_missing(form_order)]
 }
 
 get_expected_supertbl_completion_status <- function(project) {
@@ -1208,22 +1309,30 @@ get_expected_supertbl_completion_status <- function(project) {
   }
 
   event_field <- get_event_field(project$data)
+  record_event_data <- if (is.na(event_field)) {
+    project$data |>
+      filter(.data$redcap_form_name %in% nonrepeating_forms)
+  } else {
+    project$data
+  }
   record_events <- tibble(
-    record_id = as.character(project$data[[project$record_id_field]]),
+    record_id = as.character(record_event_data[[project$record_id_field]]),
     event_name = if (is.na(event_field)) {
       NA_character_
     } else {
-      as.character(project$data[[event_field]])
+      as.character(record_event_data[[event_field]])
     }
   ) |>
-    distinct()
+    distinct() |>
+    get_ordered_record_events(project)
 
   bind_rows(map(nonrepeating_forms, \(form_name) {
+    current_form <- form_name
     record_events |>
       mutate(
-        form_name = form_name,
-        field_name = paste0(form_name, "_complete"),
-        value = NA_character_
+        form_name = current_form,
+        field_name = paste0(current_form, "_complete"),
+        value = get_expected_completion_value(project, current_form, .data$event_name)
       )
   }))
 }
@@ -1253,6 +1362,48 @@ get_supertbl_nonrepeating_forms <- function(project) {
     }
     !any(!get_is_missing(repeat_instances))
   })]
+}
+
+get_expected_completion_value <- function(project, form_name, event_name) {
+  if (
+    nrow(project$events) == 0 ||
+      !all(c("redcap_form_name", "redcap_event_name") %in% names(project$events))
+  ) {
+    return(rep(NA_character_, length(event_name)))
+  }
+
+  enabled_events <- project$events |>
+    filter(.data$redcap_form_name == form_name) |>
+    pull(.data$redcap_event_name) |>
+    unique()
+
+  if_else(event_name %in% enabled_events, "Incomplete", NA_character_)
+}
+
+get_ordered_record_events <- function(record_events, project) {
+  event_order <- get_event_order(project, record_events$event_name)
+
+  record_events |>
+    mutate(
+      .record_number = suppressWarnings(as.numeric(.data$record_id)),
+      .event_order = match(.data$event_name, event_order)
+    ) |>
+    arrange(
+      is.na(.data$.record_number),
+      .data$.record_number,
+      .data$record_id,
+      .data$.event_order,
+      .data$event_name
+    ) |>
+    select(-".record_number", -".event_order")
+}
+
+get_event_order <- function(project, event_name) {
+  if ("redcap_event_name" %in% names(project$events)) {
+    return(unique(as.character(project$events$redcap_event_name)))
+  }
+
+  unique(event_name)
 }
 
 get_empty_completion_status <- function() {
@@ -1307,9 +1458,9 @@ get_consistency_findings <- function(project) {
 get_project_summary <- function(project, findings, field_summary) {
   summary <- tibble(
     source = project$source,
-    record_count = dplyr::n_distinct(project$data[[project$record_id_field]]),
-    field_count = dplyr::n_distinct(project$metadata$field_name),
-    form_count = dplyr::n_distinct(project$metadata$form_name),
+    record_count = n_distinct(project$data[[project$record_id_field]]),
+    field_count = n_distinct(project$metadata$field_name),
+    form_count = n_distinct(project$metadata$form_name),
     event_count = get_project_event_count(project),
     repeating_enabled = get_repeating_enabled(project),
     mean_missing_rate = if (nrow(field_summary) == 0) NA_real_ else mean(field_summary$missing_rate, na.rm = TRUE),
@@ -1338,7 +1489,7 @@ get_project_event_count <- function(project) {
     return(NA_integer_)
   }
 
-  dplyr::n_distinct(project$data[[event_field]])
+  n_distinct(project$data[[event_field]])
 }
 
 get_repeating_enabled <- function(project) {
