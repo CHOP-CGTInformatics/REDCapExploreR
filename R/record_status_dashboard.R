@@ -1,253 +1,409 @@
-#' @title Create a Record Status Dashboard Dataframe
+#' @title Create a Record Status Dashboard dataframe
 #'
 #' @description
-#' [record_status_dashboard()] creates a dataframe that replicates the display of
-#' the Record Status Dashboard from a REDCap project, given a REDCap API URI and token.
-#' This function provides a structured overview of the status of records and their
-#' associated instruments and events, similar to what is seen in the REDCap web interface.
-#'
-#' This output can be utilized for visualizations, such as heatmap displays, to gain
-#' insights into data completeness and record status trends.
+#' `record_status_dashboard()` pulls a REDCap project through the API and
+#' returns a plotting-friendly dataframe that mirrors the high-level Record
+#' Status Dashboard view.
 #'
 #' @details
-#' The REDCap Record Status Dashboard is a widely used tool for navigating and
-#' understanding the state of records within a REDCap project, displaying their
-#' completion statuses across various instruments and events. It can show whether
-#' forms are marked as complete, in progress/unverified, incomplete, or not yet opened.
+#' The output contains one row per record, event, and form tile that is
+#' available from the REDCap export and project metadata. Form completion status
+#' values are converted to percentages where `1` means complete, `0` means
+#' incomplete or unverified, and `NA` means no completion status was available.
+#' Repeating instrument instances are averaged within each record/event/form
+#' tile.
 #'
-#' [record_status_dashboard()] captures this information and provides it in a
-#' structured dataframe format. By default, the function converts form completion
-#' status into a percentage format, accounting for repeating instruments with overlapping
-#' form status fields. This allows for a more flexible representation of the data,
-#' especially useful when dealing with projects that utilize repeating forms or
-#' multiple events.
+#' The record identifier column uses the REDCap project's record ID field name,
+#' so a project with `infseq_id` as the record ID field returns an `infseq_id`
+#' column. The `form_name` column is ordered for direct use in ggplot displays.
 #'
-#' @param supertbl A REDCapTidieR supertibble.
+#' @param redcap_uri REDCap API URI.
+#' @param token REDCap API token.
 #'
-#' @return A dataframe representing the Record Status Dashboard view of a REDCap project.
-#' Each row corresponds to a record, and columns represent different forms, events, and their
-#' respective status indicators.
+#' @returns A tibble with the project record ID field, `form_name`, and
+#'   `pct_complete`. Longitudinal projects also include `event_name`.
 #'
 #' @examples
 #' \dontrun{
-#' # Example usage:
-#' redcap_uri <- Sys.getenv("REDCAP_URI")
-#' token <- Sys.getenv("REDCAP_TOKEN")
 #' record_status_dashboard(
-#'   redcap_uri,
-#'   token
+#'   redcap_uri = Sys.getenv("REDCAP_URI"),
+#'   token = Sys.getenv("REDCAP_TOKEN")
 #' )
 #' }
-record_status_dashboard <- function(supertbl) {
+#'
+#' @export
+record_status_dashboard <- function(redcap_uri, token) {
+  if (missing(redcap_uri)) {
+    cli_abort("{.arg redcap_uri} and {.arg token} are required.")
+  }
+  get_validate_api_credentials(redcap_uri, token)
 
-  has_arms <- "redcap_events" %in% names(supertbl)
+  project <- get_quality_project(
+    redcap_uri = redcap_uri,
+    token = token
+  )
 
-  tidy_tbls <- prepare_tidy_tbls(supertbl)
-  record_id_field <- REDCapTidieR:::get_record_id_field(supertbl$redcap_data[[1]])
+  get_record_status_dashboard(project)
+}
 
-  instrument_order <- factor(supertbl$redcap_form_label,
-                             levels = supertbl$redcap_form_label)
+get_record_status_dashboard <- function(project) {
+  dashboard_grid <- get_dashboard_grid(project)
+  completion_summary <- get_dashboard_status_summary(project)
 
-  # For Classic Databases ----
-  if (!has_arms) {
-    combined_data <- combine_data(data = tidy_tbls,
-                                  record_id_field = record_id_field,
-                                  instrument_order = instrument_order,
-                                  has_arms = has_arms)
+  out <- dashboard_grid |>
+    left_join(
+      completion_summary,
+      by = c("record_id", "event_name", "form_name"),
+      relationship = "one-to-one"
+    ) |>
+    mutate(
+      record_id = factor(
+        .data$record_id,
+        levels = rev(unique(dashboard_grid$record_id))
+      ),
+      form_name = factor(
+        .data$display_form_name,
+        levels = unique(dashboard_grid$display_form_name)
+      )
+    ) |>
+    select(
+      "record_id",
+      any_of("event_name"),
+      "form_name",
+      "pct_complete"
+    )
 
-    out <- reshape_data(combined_data, record_id_field = record_id_field)
+  if ("event_name" %in% names(out) && all(is.na(out$event_name))) {
+    out <- out |>
+      select(-"event_name")
   }
 
-  # For Longitudinal Databases ----
-  if (has_arms) {
-    linked_arms <- do.call(rbind, supertbl$redcap_events)
-
-    event_order <- levels(linked_arms$event_name)
-
-    # Apply the function across each named element (sub-table) of `out`
-    out <- map(tidy_tbls, join_linked_arms, linked_arms = linked_arms)
-
-    combined_data <- combine_data(data = tidy_tbls,
-                                  record_id_field = record_id_field,
-                                  instrument_order = instrument_order,
-                                  event_order = event_order,
-                                  has_arms = has_arms,
-                                  linked_arms = linked_arms)
-
-    out <- combined_data %>%
-      reshape_data(record_id_field = record_id_field)
-  }
-
+  names(out)[names(out) == "record_id"] <- project$record_id_field
   out
 }
 
-#' @title Prepare supertibble and tidy tibbles for record status dashboard processing
-#'
-#' @description Helper function that returns the supertibble and tidy tibbles
-#' from it.
-#'
-#' @inheritParams REDCapTidieR::read_redcap
-#'
-#' @keywords internal
-#'
-#' @returns a list
-prepare_tidy_tbls <- function(supertbl) {
-  tidy_tbls <- supertbl %>%
+get_dashboard_grid <- function(project) {
+  forms <- get_dashboard_forms(project)
+  record_events <- get_dashboard_record_events(project)
+
+  if (nrow(record_events) == 0 || nrow(forms) == 0) {
+    return(get_empty_dashboard_grid())
+  }
+
+  event_forms <- get_dashboard_event_forms(project, forms)
+
+  if (all(is.na(record_events$event_name))) {
+    return(
+      get_dashboard_cross_join(record_events, forms) |>
+        mutate(display_form_name = .data$form_label) |>
+        select("record_id", "event_name", "form_name", "display_form_name")
+    )
+  }
+
+  record_events |>
+    left_join(event_forms, by = "event_name", relationship = "many-to-many") |>
+    filter(!is.na(.data$form_name)) |>
     mutate(
-      redcap_data = map2(
-        .data$redcap_data,
-        .data$redcap_form_name,
-        ~ .x %>%
-          mutate(
-            redcap_form_name = .y,
-            redcap_form_label = supertbl %>%
-              filter(redcap_form_name == .y) %>%
-              pull(redcap_form_label)
-          )
+      display_form_name = paste(
+        .data$event_label,
+        .data$form_label,
+        sep = " : "
       )
-    ) %>%
-    extract_tibbles()
-
-  tidy_tbls
-}
-
-#' @title Join the a linked arms dataset onto a supertibble data tibble
-#'
-#' @description
-#' Using linked arms data, join onto each data tibble to make
-#' the original event name accessible. During [read_redcap()] operations,
-#' event names have an "arm" suffix that gets dropped. This looks to reinstate it
-#' for proper links later on in the [record_status_dashboard()] logic.
-#'
-#' @param data_tbl a data tibble from a supertibble
-#' @param linked_arms linked arms data
-#'
-#' @returns a data tibble appended with linked arms data
-#'
-#' @keywords internal
-join_linked_arms <- function(data_tbl, linked_arms) {
-  # Check if required columns exist in the sub-table
-  if (all(c("redcap_form_name", "redcap_event") %in% colnames(data_tbl))) {
-
-    # TODO: Necessary?
-    data_tbl %>%
-      # TODO: Fix this. Can cause artificial inflation of rows
-      left_join(linked_arms, by = c("redcap_form_name" = "redcap_event"),
-                relationship = "many-to-many") %>%
-      select(infseq_id, form_status_complete, starts_with("redcap"))
-  } else {
-    # If columns don't exist, return the sub-table unchanged
-    data_tbl
-  }
-}
-
-#' @title Join supertibble datatibbles and arrange by instrument/event order
-#'
-#' @description This function takes a list of data tibbles and binds together
-#' the columns necessary for the record status dashboard view:
-#'
-#' - the record ID
-#' - the form completion status
-#' - the unique event name
-#' - the redcap form label
-#' - the redcap event label (if longitudinal)
-#'
-#' @param data a named list of data tibbles from the supertbl
-#' @param record_id_field the record ID field for the REDCap project.
-#' @param instrument_order a vector determining the factor level order of the project instruments
-#' @param event_order a vector determining the factor level order of the project events
-#' @param has_arms TRUE/FALSE whether or not the project is longitudinal/has arms
-#' @param linked_arms linked arms data for a longitudinal project. Default `NULL`.
-#'
-#' @returns a dataframe
-#'
-#' @keywords internal
-combine_data <- function(data,
-                         record_id_field,
-                         instrument_order,
-                         event_order = NULL,
-                         has_arms,
-                         linked_arms = NULL) {
-  common_columns <- Reduce(intersect, lapply(data, names)) # nolint: object_usage_linter
-
-  out <- data %>%
-    map(~ select(.x, all_of(common_columns))) %>%
-    bind_rows() %>%
-    mutate(
-      redcap_form_label = factor(.data$redcap_form_label,
-                                 levels = levels(instrument_order),
-                                 ordered = TRUE)
-    )
-
-  if (!has_arms) {
-    out %>%
-      arrange(record_id_field, .data$redcap_form_label)
-  } else {
-    out %>%
-      mutate(
-        redcap_form_label = factor(.data$redcap_form_label,
-                                   levels = levels(instrument_order))
-      ) %>%
-      mutate(
-        redcap_event_label = map_chr(.data$redcap_event,
-                                     ~ get_event_name(.x, linked_arms = linked_arms)),
-        redcap_event_label = factor(.data$redcap_event_label,
-                                    levels = event_order)
-      ) |>
-      arrange(record_id_field, .data$redcap_event_label)
-  }
-}
-
-#' @noRd
-get_event_name <- function(redcap_event, linked_arms) {
-  linked_arms |>
-    filter(.data$redcap_event == !!redcap_event) |>
-    pull(.data$event_name) |>
-    unique() |>
-    as.character()
-}
-
-#' @title Rehsape combined data for record status dashboard display
-#'
-#' @description This function takes the output of [combine_data()] and performs
-#' several pivoting operations to get the data in a format that yields only 3 columns:
-#'
-#' - the record ID field for the REDCap project
-#' - the form name field, combined with the event field if applicable to a longitudinal project
-#' - the completion status of that field, default as a percentage
-#'
-#' @param data a bound data tibble output from [combine_data()]
-#' @param record_id_field the record ID field for the REDCap project.
-#'
-#' @returns a dataframe
-#'
-#' @keywords internal
-reshape_data <- function(data, record_id_field) {
-  pivoted_data <- data %>%
-    # Convert to percentage to temporarily handle repeat events
-    mutate(
-      .by = c(all_of(record_id_field), any_of(c("redcap_event_label", "redcap_form_label"))),
-      form_percent_complete = mean(.data$form_status_complete == "Complete")
     ) |>
-    select(-.data$form_status_complete) |>
-    pivot_wider(
-      id_cols = record_id_field,
-      names_from = any_of(c("redcap_event_label", "redcap_form_label")),
-      names_sep = " : ",
-      values_from = .data$form_percent_complete,
-      values_fn = unique
-    )
+    select("record_id", "event_name", "form_name", "display_form_name")
+}
 
-  out <- pivoted_data %>%
-    pivot_longer(
-      cols = -record_id_field, # All columns except infseq_id
-      names_to = "form_name", # New column to store the names of the variables
-      values_to = "pct_complete" # New column to store the values
-    )
+get_dashboard_cross_join <- function(x, y) {
+  x |>
+    mutate(.join_key = 1L) |>
+    left_join(
+      y |> mutate(.join_key = 1L),
+      by = ".join_key",
+      relationship = "many-to-many"
+    ) |>
+    select(-".join_key")
+}
 
-  out %>%
+get_empty_dashboard_grid <- function() {
+  tibble(
+    record_id = character(),
+    event_name = character(),
+    form_name = character(),
+    display_form_name = character()
+  )
+}
+
+get_dashboard_forms <- function(project) {
+  forms <- project$metadata |>
+    distinct(.data$form_name) |>
+    mutate(form_order = row_number())
+
+  instruments <- get_dashboard_instruments(project)
+  if (nrow(instruments) > 0) {
+    forms <- forms |>
+      left_join(instruments, by = "form_name")
+  } else {
+    forms$form_label <- NA_character_
+  }
+
+  forms |>
     mutate(
-      !!sym(record_id_field) := factor(!!sym(record_id_field), levels = rev(unique(pivoted_data[[record_id_field]]))),
-      form_name = factor(.data$form_name, levels = colnames(pivoted_data)[-1])
+      form_label = if_else(
+        get_is_missing(.data$form_label),
+        .data$form_name,
+        .data$form_label
+      )
+    ) |>
+    arrange(.data$form_order) |>
+    select("form_name", "form_label", "form_order")
+}
+
+get_dashboard_instruments <- function(project) {
+  instruments <- get_optional_api_table(project$instruments)
+  if (nrow(instruments) == 0 && ncol(instruments) == 0) {
+    return(tibble(form_name = character(), form_label = character()))
+  }
+
+  names(instruments) <- get_clean_names(names(instruments))
+
+  form_column <- intersect(
+    c("instrument_name", "form_name", "form"),
+    names(instruments)
+  )
+  label_column <- intersect(
+    c("instrument_label", "form_label", "label"),
+    names(instruments)
+  )
+
+  if (length(form_column) == 0 || length(label_column) == 0) {
+    return(tibble(form_name = character(), form_label = character()))
+  }
+
+  instruments |>
+    transmute(
+      form_name = as.character(.data[[form_column[[1]]]]),
+      form_label = as.character(.data[[label_column[[1]]]])
+    ) |>
+    distinct(.data$form_name, .keep_all = TRUE)
+}
+
+get_dashboard_record_events <- function(project) {
+  event_field <- get_event_field(project$data)
+
+  base_rows <- get_dashboard_base_row(project$data)
+
+  out <- project$data[base_rows, , drop = FALSE] |>
+    transmute(
+      record_id = as.character(.data[[project$record_id_field]]),
+      event_name = if (is.na(event_field)) NA_character_ else
+        as.character(.data[[event_field]])
+    ) |>
+    distinct(.data$record_id, .data$event_name)
+
+  if (nrow(out) > 0) {
+    return(out)
+  }
+
+  project$data |>
+    transmute(
+      record_id = as.character(.data[[project$record_id_field]]),
+      event_name = if (is.na(event_field)) NA_character_ else
+        as.character(.data[[event_field]])
+    ) |>
+    distinct(.data$record_id, .data$event_name)
+}
+
+get_dashboard_base_row <- function(data) {
+  if (!"redcap_repeat_instrument" %in% names(data)) {
+    return(rep(TRUE, nrow(data)))
+  }
+
+  get_is_missing(data$redcap_repeat_instrument)
+}
+
+get_dashboard_event_forms <- function(project, forms) {
+  event_field <- get_event_field(project$data)
+  if (is.na(event_field)) {
+    return(tibble(
+      event_name = NA_character_,
+      event_label = NA_character_,
+      form_name = forms$form_name,
+      form_label = forms$form_label
+    ))
+  }
+
+  event_forms <- get_dashboard_event_form_pairs(project, forms)
+  event_labels <- get_dashboard_event_labels(project)
+
+  event_forms |>
+    left_join(event_labels, by = "event_name") |>
+    left_join(forms, by = "form_name") |>
+    mutate(
+      event_label = if_else(
+        get_is_missing(.data$event_label),
+        .data$event_name,
+        .data$event_label
+      )
+    ) |>
+    arrange(.data$event_order, .data$form_order) |>
+    select("event_name", "event_label", "form_name", "form_label")
+}
+
+get_dashboard_event_form_pairs <- function(project, forms) {
+  event_instruments <- get_optional_api_table(project$event_instruments)
+  if (
+    nrow(event_instruments) > 0 &&
+      all(c("redcap_event_name", "form_name") %in% names(event_instruments))
+  ) {
+    return(
+      event_instruments |>
+        transmute(
+          event_name = as.character(.data$redcap_event_name),
+          form_name = as.character(.data$form_name)
+        ) |>
+        filter(.data$form_name %in% forms$form_name) |>
+        distinct(.data$event_name, .data$form_name)
     )
+  }
+
+  event_field <- get_event_field(project$data)
+  events <- project$data |>
+    transmute(event_name = as.character(.data[[event_field]])) |>
+    distinct(.data$event_name)
+
+  get_dashboard_cross_join(events, forms |> select("form_name"))
+}
+
+get_dashboard_event_labels <- function(project) {
+  event_field <- get_event_field(project$data)
+  data_events <- project$data |>
+    transmute(
+      event_name = if (is.na(event_field)) NA_character_ else
+        as.character(.data[[event_field]])
+    ) |>
+    distinct(.data$event_name) |>
+    mutate(event_order = row_number())
+
+  events <- get_optional_api_table(project$events)
+  if (nrow(events) == 0 || !"redcap_event_name" %in% names(events)) {
+    return(
+      data_events |>
+        mutate(event_label = .data$event_name)
+    )
+  }
+
+  event_label_column <- if ("event_name" %in% names(events)) "event_name" else
+    "redcap_event_name"
+  events$event_label <- as.character(events[[event_label_column]])
+
+  events |>
+    transmute(
+      event_name = as.character(.data$redcap_event_name),
+      event_label = .data$event_label
+    ) |>
+    right_join(data_events, by = "event_name") |>
+    arrange(.data$event_order)
+}
+
+get_dashboard_status_summary <- function(project) {
+  completion_status <- get_dashboard_status(project)
+  if (nrow(completion_status) == 0) {
+    return(tibble(
+      record_id = character(),
+      event_name = character(),
+      form_name = character(),
+      pct_complete = numeric()
+    ))
+  }
+
+  completion_status |>
+    mutate(value = get_completion_status_value(.data$value)) |>
+    group_by(.data$record_id, .data$event_name, .data$form_name) |>
+    summarise(
+      pct_complete = get_dashboard_pct_complete(.data$value),
+      .groups = "drop"
+    )
+}
+
+get_dashboard_status <- function(project) {
+  completion_fields <- names(project$data)[str_detect(
+    names(project$data),
+    "_complete$"
+  )]
+  if (length(completion_fields) == 0) {
+    return(get_empty_completion_status())
+  }
+
+  bind_rows(map(completion_fields, \(field) {
+    form_name <- sub("_complete$", "", field)
+    rows <- get_dashboard_completion_rows(project, form_name)
+
+    if (!any(rows)) {
+      return(get_empty_completion_status())
+    }
+
+    tibble(
+      record_id = as.character(project$data[[project$record_id_field]][rows]),
+      form_name = form_name,
+      event_name = get_event_values(project$data, rows),
+      repeat_instrument = get_repeat_instrument_values(project$data, rows),
+      repeat_instance = get_repeat_instance_values(project$data, rows),
+      field_name = field,
+      value = as.character(project$data[[field]][rows])
+    )
+  }))
+}
+
+get_dashboard_completion_rows <- function(project, form_name) {
+  repeat_form <- get_is_repeating_form(project, form_name)
+  repeated_rows <- get_repeating_instrument_rows(project$data)
+
+  rows <- if (repeat_form) {
+    get_matching_repeat_rows(project$data, form_name)
+  } else {
+    !repeated_rows
+  }
+
+  rows & get_event_form_enabled_rows(project, form_name)
+}
+
+get_is_repeating_form <- function(project, form_name) {
+  if (
+    "redcap_repeat_instrument" %in%
+      names(project$data) &&
+      any(
+        as.character(project$data$redcap_repeat_instrument) == form_name,
+        na.rm = TRUE
+      )
+  ) {
+    return(TRUE)
+  }
+
+  repeating_instruments <- get_optional_api_table(project$repeating_instruments)
+  if (nrow(repeating_instruments) == 0) {
+    return(FALSE)
+  }
+
+  names(repeating_instruments) <- get_clean_names(names(repeating_instruments))
+
+  form_columns <- intersect(
+    c("form_name", "instrument_name", "redcap_repeat_instrument"),
+    names(repeating_instruments)
+  )
+  if (length(form_columns) == 0) {
+    return(FALSE)
+  }
+
+  any(
+    as.character(repeating_instruments[[form_columns[[1]]]]) == form_name,
+    na.rm = TRUE
+  )
+}
+
+get_dashboard_pct_complete <- function(value) {
+  if (all(get_is_missing(value))) {
+    return(NA_real_)
+  }
+
+  mean(value == "Complete", na.rm = TRUE)
 }

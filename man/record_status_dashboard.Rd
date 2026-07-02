@@ -2,48 +2,42 @@
 % Please edit documentation in R/record_status_dashboard.R
 \name{record_status_dashboard}
 \alias{record_status_dashboard}
-\title{Create a Record Status Dashboard Dataframe}
+\title{Create a Record Status Dashboard dataframe}
 \usage{
-record_status_dashboard(supertbl)
+record_status_dashboard(redcap_uri, token)
 }
 \arguments{
-\item{supertbl}{A REDCapTidieR supertibble.}
+\item{redcap_uri}{REDCap API URI.}
+
+\item{token}{REDCap API token.}
 }
 \value{
-A dataframe representing the Record Status Dashboard view of a REDCap project.
-Each row corresponds to a record, and columns represent different forms, events, and their
-respective status indicators.
+A tibble with the project record ID field, \code{form_name}, and
+\code{pct_complete}. Longitudinal projects also include \code{event_name}.
 }
 \description{
-\code{\link[=record_status_dashboard]{record_status_dashboard()}} creates a dataframe that replicates the display of
-the Record Status Dashboard from a REDCap project, given a REDCap API URI and token.
-This function provides a structured overview of the status of records and their
-associated instruments and events, similar to what is seen in the REDCap web interface.
-
-This output can be utilized for visualizations, such as heatmap displays, to gain
-insights into data completeness and record status trends.
+\code{record_status_dashboard()} pulls a REDCap project through the API and
+returns a plotting-friendly dataframe that mirrors the high-level Record
+Status Dashboard view.
 }
 \details{
-The REDCap Record Status Dashboard is a widely used tool for navigating and
-understanding the state of records within a REDCap project, displaying their
-completion statuses across various instruments and events. It can show whether
-forms are marked as complete, in progress/unverified, incomplete, or not yet opened.
+The output contains one row per record, event, and form tile that is
+available from the REDCap export and project metadata. Form completion status
+values are converted to percentages where \code{1} means complete, \code{0} means
+incomplete or unverified, and \code{NA} means no completion status was available.
+Repeating instrument instances are averaged within each record/event/form
+tile.
 
-\code{\link[=record_status_dashboard]{record_status_dashboard()}} captures this information and provides it in a
-structured dataframe format. By default, the function converts form completion
-status into a percentage format, accounting for repeating instruments with overlapping
-form status fields. This allows for a more flexible representation of the data,
-especially useful when dealing with projects that utilize repeating forms or
-multiple events.
+The record identifier column uses the REDCap project's record ID field name,
+so a project with \code{infseq_id} as the record ID field returns an \code{infseq_id}
+column. The \code{form_name} column is ordered for direct use in ggplot displays.
 }
 \examples{
 \dontrun{
-# Example usage:
-redcap_uri <- Sys.getenv("REDCAP_URI")
-token <- Sys.getenv("REDCAP_TOKEN")
 record_status_dashboard(
-  redcap_uri,
-  token
+  redcap_uri = Sys.getenv("REDCAP_URI"),
+  token = Sys.getenv("REDCAP_TOKEN")
 )
 }
+
 }

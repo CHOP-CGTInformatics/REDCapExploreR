@@ -15,14 +15,12 @@ Imports:
     dplyr,
     purrr,
     REDCapR,
-    REDCapTidieR,
     rlang,
     stats,
     stringr,
     tibble,
     tidyr,
-    tidyselect,
-    utils
+    tidyselect
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

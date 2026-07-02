@@ -11,7 +11,7 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 
 The goal of REDCapExploreR is to provide users with tools to
 post-process and perform exploratory data analysis on REDCap project
-data. It is intended to work hand in hand with the REDCapTidieR package.
+data through the REDCap API.
 
 This repository is in early stages active development!
 
@@ -35,5 +35,8 @@ library(REDCapExploreR)
 ### Recreating a Project’s Record Status Dashboard
 
 ``` r
-data <- record_status_dashboard(redcap_uri = Sys.getenv("REDCAP_URI"), token = token)
+redcap_uri <- Sys.getenv("REDCAP_URI")
+token <- Sys.getenv("REDCAP_TOKEN")
+
+data <- record_status_dashboard(redcap_uri = redcap_uri, token = token)
 ```
