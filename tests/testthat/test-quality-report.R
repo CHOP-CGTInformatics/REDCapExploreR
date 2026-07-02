@@ -1,6 +1,7 @@
 build_mock_quality_report <- function(data,
                                       metadata,
                                       events = tibble::tibble(),
+                                      event_instruments = tibble::tibble(),
                                       instruments = tibble::tibble(),
                                       repeating_instruments = tibble::tibble(),
                                       checks = c(
@@ -16,6 +17,7 @@ build_mock_quality_report <- function(data,
     data = data,
     metadata = metadata,
     events = events,
+    event_instruments = event_instruments,
     instruments = instruments,
     repeating_instruments = repeating_instruments
   )
@@ -77,6 +79,7 @@ test_that("pull_redcap_project quiets REDCapR API messages", {
     redcap_read_oneshot = quiet_records,
     redcap_metadata_read = quiet_metadata,
     redcap_event_read = quiet_optional,
+    redcap_event_instruments = quiet_optional,
     redcap_instruments = quiet_optional,
     redcap_instrument_repeating = quiet_optional
   )
@@ -90,7 +93,7 @@ test_that("pull_redcap_project quiets REDCapR API messages", {
   )
   expect_named(
     project,
-    c("data", "metadata", "events", "instruments", "repeating_instruments")
+    c("data", "metadata", "events", "event_instruments", "instruments", "repeating_instruments")
   )
 })
 
@@ -131,6 +134,7 @@ test_that("build_quality_report returns expected findings and summaries for API 
       "fields",
       "forms",
       "events",
+      "event_instruments",
       "instruments",
       "repeating_instruments",
       "instrument_structure",
@@ -408,13 +412,13 @@ test_that("API empty-but-valid input returns stable empty report", {
   expect_equal(report$summaries$project$field_count, 2)
 })
 
-test_that("API nonrepeating form status findings include missing form rows", {
+test_that("API nonrepeating form status findings include accessible incomplete rows", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     demographic_value = c("present", "present"),
     lab_value = c("present", NA),
     demographics_complete = c(2, 2),
-    labs_complete = c(2, NA)
+    labs_complete = c(2, 0)
   )
 
   metadata <- tibble::tibble(
@@ -435,7 +439,126 @@ test_that("API nonrepeating form status findings include missing form rows", {
   expect_equal(report$findings$record_id, "2")
   expect_equal(report$findings$form_name, "labs")
   expect_equal(report$findings$field_name, "labs_complete")
-  expect_true(is.na(report$findings$value))
+  expect_equal(report$findings$value, "Incomplete")
+})
+
+test_that("API form applicability excludes forms disabled for a longitudinal event", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "1"),
+    redcap_event_name = c("event_1_arm_1", "event_2_arm_1"),
+    main_value = c("present", "present"),
+    lab_value = c(NA, NA),
+    main_complete = c(2, 2),
+    labs_complete = c(0, 0)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "main_value", "lab_value"),
+    form_name = c("main", "main", "labs"),
+    field_type = c("text", "text", "text"),
+    field_label = c("Record ID", "Main Value", "Lab Value"),
+    required_field = c("y", "n", "y")
+  )
+
+  event_instruments <- tibble::tibble(
+    arm_num = c(1L, 1L, 1L),
+    unique_event_name = c("event_1_arm_1", "event_2_arm_1", "event_1_arm_1"),
+    form = c("main", "main", "labs")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    event_instruments = event_instruments,
+    checks = c("missingness", "operational")
+  )
+
+  expect_false(any(
+    report$findings$form_name == "labs" &
+      report$findings$event_name == "event_2_arm_1",
+    na.rm = TRUE
+  ))
+  expect_true(any(
+    report$findings$issue == "required_field_missing" &
+      report$findings$form_name == "labs" &
+      report$findings$event_name == "event_1_arm_1"
+  ))
+  expect_true(any(
+    report$findings$issue == "incomplete_form_status" &
+      report$findings$form_name == "labs" &
+      report$findings$event_name == "event_1_arm_1"
+  ))
+})
+
+test_that("API form applicability excludes Forms Display Logic structural blanks", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2"),
+    main_value = c("present", "present"),
+    conditional_value = c("answered", NA),
+    main_complete = c(2, 2),
+    conditional_complete = c(2, NA)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "main_value", "conditional_value"),
+    form_name = c("main", "main", "conditional"),
+    field_type = c("text", "text", "text"),
+    field_label = c("Record ID", "Main Value", "Conditional Value"),
+    required_field = c("y", "n", "y")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = c("missingness", "operational")
+  )
+
+  expect_false(any(report$findings$record_id == "2" & report$findings$form_name == "conditional"))
+  expect_equal(
+    report$summaries$fields |>
+      dplyr::filter(.data$field_name == "conditional_value") |>
+      dplyr::pull(.data$record_count),
+    1
+  )
+  expect_equal(report$summaries$project$mean_missing_rate, 0)
+  expect_equal(report$summaries$records$missing_field_count, c(0, 0))
+})
+
+test_that("API field summaries ignore structural missingness between repeating instruments", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "1", "1"),
+    redcap_repeat_instrument = c(NA, "repeat_a", "repeat_b"),
+    redcap_repeat_instance = c(NA, 1, 1),
+    main_value = c("present", NA, NA),
+    repeat_a_value = c(NA, "a", NA),
+    repeat_b_value = c(NA, NA, "b"),
+    main_complete = c(2, NA, NA),
+    repeat_a_complete = c(NA, 2, NA),
+    repeat_b_complete = c(NA, NA, 2)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "main_value", "repeat_a_value", "repeat_b_value"),
+    form_name = c("main", "main", "repeat_a", "repeat_b"),
+    field_type = c("text", "text", "text", "text"),
+    field_label = c("Record ID", "Main Value", "Repeat A Value", "Repeat B Value"),
+    required_field = c("y", "y", "y", "y")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  expect_equal(nrow(report$findings), 0)
+  expect_equal(
+    report$summaries$fields |>
+      dplyr::filter(.data$field_name %in% c("repeat_a_value", "repeat_b_value")) |>
+      dplyr::pull(.data$record_count),
+    c(1, 1)
+  )
+  expect_equal(report$summaries$records$missing_field_count, c(0, 0, 0))
 })
 
 test_that("API completion findings preserve form order around repeating forms", {
@@ -536,27 +659,16 @@ test_that("API longitudinal completion findings preserve multi-arm event grid", 
   findings <- report$findings |>
     dplyr::select("record_id", "form_name", "event_name", "field_name", "value")
 
-  expect_equal(nrow(findings), 16)
+  expect_equal(nrow(findings), 11)
   expect_equal(
     findings$event_name[1:8],
     raw_data$redcap_event_name
   )
   expect_equal(
-    findings$event_name[9:16],
-    raw_data$redcap_event_name
+    findings$event_name[9:11],
+    raw_data$redcap_event_name[c(1, 3, 5)]
   )
-  expect_true(any(
-    findings$record_id == "record_3" &
-      findings$event_name == "event_2_arm_1" &
-      findings$field_name == "nonrepeated2_complete" &
-      is.na(findings$value)
-  ))
-  expect_true(any(
-    findings$record_id == "record_4" &
-      findings$event_name == "event_3_arm_2" &
-      findings$field_name == "nonrepeated2_complete" &
-      is.na(findings$value)
-  ))
+  expect_false(any(is.na(findings$value)))
 })
 
 test_that("API event metadata does not override raw event row counts", {
@@ -635,4 +747,188 @@ test_that("API completion status values are normalized", {
     c("Incomplete", "Unverified", NA, "Incomplete", "Unverified")
   )
   expect_equal(report$findings$expected, rep("Complete", 5))
+})
+
+test_that("API required missingness respects simple branching logic", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    field_a = c(1, 2, 1),
+    field_b = c(NA, NA, "present"),
+    main_complete = c(2, 2, 2)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "field_a", "field_b"),
+    form_name = c("main", "main", "main"),
+    field_type = c("text", "text", "text"),
+    field_label = c("Record ID", "Field A", "Field B"),
+    required_field = c("y", "y", "y"),
+    branching_logic = c(NA, NA, "[field_a] = '1'")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  field_b_findings <- report$findings |>
+    dplyr::filter(
+      .data$issue == "required_field_missing",
+      .data$field_name == "field_b"
+    )
+
+  expect_equal(field_b_findings$record_id, "1")
+  expect_equal(
+    report$summaries$fields |>
+      dplyr::filter(.data$field_name == "field_b") |>
+      dplyr::select("record_count", "missing_count", "missing_rate"),
+    tibble::tibble(record_count = 2L, missing_count = 1L, missing_rate = 0.5)
+  )
+  expect_equal(report$summaries$records$missing_field_count, c(1, 0, 0))
+})
+
+test_that("API required missingness treats NA branching evaluations as hidden", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    infusion_admin = c(0, 1, NA),
+    infusion_reason = c(NA, NA, NA),
+    infusion_complete = c(2, 2, 2)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "infusion_admin", "infusion_reason"),
+    form_name = c("infusion", "infusion", "infusion"),
+    field_type = c("text", "yesno", "text"),
+    field_label = c("Record ID", "Infusion Administered", "Infusion Reason"),
+    required_field = c("y", "y", "y"),
+    branching_logic = c(NA, NA, "[infusion_admin] = '0'")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  infusion_findings <- report$findings |>
+    dplyr::filter(
+      .data$issue == "required_field_missing",
+      .data$field_name == "infusion_reason"
+    )
+
+  expect_equal(infusion_findings$record_id, "1")
+  expect_equal(
+    report$summaries$fields |>
+      dplyr::filter(.data$field_name == "infusion_reason") |>
+      dplyr::select("record_count", "missing_count", "missing_rate"),
+    tibble::tibble(record_count = 1L, missing_count = 1L, missing_rate = 1)
+  )
+})
+
+test_that("API required missingness respects compound branching logic", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3", "4"),
+    field_a = c(1, 1, 2, 2),
+    field_c = c("yes", "no", "yes", "yes"),
+    field_d = c(NA, NA, NA, "present"),
+    main_complete = 2
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "field_a", "field_c", "field_d"),
+    form_name = c("main", "main", "main", "main"),
+    field_type = c("text", "text", "text", "text"),
+    field_label = c("Record ID", "Field A", "Field C", "Field D"),
+    required_field = c("y", "n", "n", "y"),
+    branching_logic = c(NA, NA, NA, "([field_a] = '1' and [field_c] = 'yes') or [field_a] = '2'")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  field_d_findings <- report$findings |>
+    dplyr::filter(
+      .data$issue == "required_field_missing",
+      .data$field_name == "field_d"
+    )
+
+  expect_equal(field_d_findings$record_id, c("1", "3"))
+  expect_equal(
+    report$summaries$fields |>
+      dplyr::filter(.data$field_name == "field_d") |>
+      dplyr::pull(.data$record_count),
+    3
+  )
+})
+
+test_that("API required missingness respects checkbox branching logic", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    symptoms___fever = c(1, 0, 1),
+    fever_detail = c(NA, NA, "high"),
+    main_complete = 2
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "symptoms", "fever_detail"),
+    form_name = c("main", "main", "main"),
+    field_type = c("text", "checkbox", "text"),
+    field_label = c("Record ID", "Symptoms", "Fever Detail"),
+    select_choices_or_calculations = c(NA, "fever, Fever", NA),
+    required_field = c("y", "n", "y"),
+    branching_logic = c(NA, NA, "[symptoms(fever)] = '1'")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  fever_findings <- report$findings |>
+    dplyr::filter(
+      .data$issue == "required_field_missing",
+      .data$field_name == "fever_detail"
+    )
+
+  expect_equal(fever_findings$record_id, "1")
+  expect_equal(
+    report$summaries$fields |>
+      dplyr::filter(.data$field_name == "fever_detail") |>
+      dplyr::pull(.data$record_count),
+    2
+  )
+})
+
+test_that("API required missingness keeps unsupported branching logic assessable", {
+  redcap_data <- tibble::tibble(
+    record_id = "1",
+    start_date = "2025-01-01",
+    followup_date = NA_character_,
+    main_complete = 2
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "start_date", "followup_date"),
+    form_name = c("main", "main", "main"),
+    field_type = c("text", "text", "text"),
+    field_label = c("Record ID", "Start Date", "Followup Date"),
+    required_field = c("y", "n", "y"),
+    branching_logic = c(NA, NA, "datediff([start_date], 'today', 'd') > 30")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  expect_true(any(
+    report$findings$issue == "required_field_missing" &
+      report$findings$field_name == "followup_date"
+  ))
 })

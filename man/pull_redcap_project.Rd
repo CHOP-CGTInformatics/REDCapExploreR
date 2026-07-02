@@ -12,8 +12,8 @@ pull_redcap_project(redcap_uri, token)
 \item{token}{REDCap API token.}
 }
 \value{
-A list containing raw records, metadata, events, instruments, and
-repeating instrument configuration.
+A list containing raw records, metadata, events, event-instrument
+mapping, instruments, and repeating instrument configuration.
 }
 \description{
 Retrieves records and project metadata from the REDCap API using REDCapR.

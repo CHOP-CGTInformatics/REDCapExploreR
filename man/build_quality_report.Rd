@@ -43,6 +43,38 @@ standardized metadata field names.
 general data quality heuristics, and returns findings, summaries, and
 interpreted metadata.
 }
+\details{
+Current \code{findings$issue} values by \code{findings$check}:
+\itemize{
+\item \code{missingness}
+\itemize{
+\item \code{required_field_missing}
+\item \code{unexpected_sparse_field}
+}
+\item \code{metadata}
+\itemize{
+\item \code{duplicate_field_label}
+\item \code{missing_field_label}
+\item \code{missing_choice_definition}
+\item \code{orphaned_branching_reference}
+\item \code{high_risk_free_text}
+}
+\item \code{outliers}
+\itemize{
+\item \code{outside_validation_range}
+\item \code{numeric_iqr_outlier}
+\item \code{future_date}
+}
+\item \code{operational}
+\itemize{
+\item \code{incomplete_form_status}
+}
+\item \code{consistency}
+\itemize{
+\item \code{checkbox_none_with_other}
+}
+}
+}
 \examples{
 \dontrun{
 report <- build_quality_report(
