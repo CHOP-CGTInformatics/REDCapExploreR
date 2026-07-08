@@ -12,8 +12,10 @@ License: What license is it under?
 Encoding: UTF-8
 Imports: 
     cli,
+    DT,
     dplyr,
     ggplot2,
+    htmltools,
     purrr,
     REDCapR,
     rlang,
