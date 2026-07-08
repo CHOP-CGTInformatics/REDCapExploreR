@@ -46,5 +46,24 @@ library(REDCapExploreR)
 redcap_uri <- Sys.getenv("REDCAP_URI")
 token <- Sys.getenv("REDCAP_TOKEN")
 
-data <- record_status_dashboard(redcap_uri = redcap_uri, token = token)
+data <- get_record_status_data(redcap_uri = redcap_uri, token = token)
+
+plot_record_status(data)
+```
+
+For larger projects, use compact mode to reduce x-axis text size, truncate long
+form labels, and draw lighter tile borders.
+
+```{r, eval=FALSE}
+plot_record_status(data, mode = "compact")
+
+plot_record_status(data, mode = "compact", form_label_max = 20)
+```
+
+Because `plot_record_status()` returns a ggplot object, you can add standard
+ggplot2 layers to customize the display.
+
+```{r, eval=FALSE}
+plot_record_status(data) +
+  ggplot2::labs(title = "REDCap Record Status")
 ```

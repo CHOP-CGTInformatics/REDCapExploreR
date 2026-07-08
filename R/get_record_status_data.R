@@ -1,38 +1,56 @@
-#' @title Create a Record Status Dashboard dataframe
+#' @title Get Record Status Dashboard data
 #'
 #' @description
-#' `record_status_dashboard()` pulls a REDCap project through the API and
-#' returns a plotting-friendly dataframe that mirrors the high-level Record
-#' Status Dashboard view.
+#' `get_record_status_data()` retrieves REDCap records and project structure
+#' through the API, then returns a plotting-friendly tile table similar to the
+#' high-level REDCap Record Status Dashboard.
 #'
 #' @details
-#' The output contains one row per record, event, and form tile that is
-#' available from the REDCap export and project metadata. Form completion status
-#' values are converted to percentages where `1` means complete, `0` means
-#' incomplete or unverified, and `NA` means no completion status was available.
-#' Repeating instrument instances are averaged within each record/event/form
-#' tile.
+#' REDCap stores form status in one `*_complete` field per instrument. This
+#' function normalizes those status values and joins them to a record/form grid
+#' built from API records, metadata, instrument metadata, event metadata, and
+#' event-instrument mapping.
+#'
+#' For classic projects, the output contains one row per record and instrument.
+#' For longitudinal projects, the output contains one row per observed
+#' record/event/instrument combination enabled by the event-instrument mapping.
+#' Observed record/event combinations are taken from all API rows, including
+#' rows that only exist because a repeating instrument was exported.
+#'
+#' Repeating instrument instances are summarized into the same tile rather than
+#' returned as separate rows. The tile's `pct_complete` value is the proportion
+#' of relevant instances marked complete. Non-repeating instruments are
+#' evaluated only on non-repeating rows to avoid structural blanks from other
+#' repeating instruments.
+#'
+#' Completion values are returned as proportions where `1` means all relevant
+#' statuses are complete, `0` means no relevant statuses are complete, and `NA`
+#' means no completion status was available for that tile.
 #'
 #' The record identifier column uses the REDCap project's record ID field name,
 #' so a project with `infseq_id` as the record ID field returns an `infseq_id`
-#' column. The `form_name` column is ordered for direct use in ggplot displays.
+#' column. `form_name` is a factor ordered by REDCap event and instrument order.
+#' In longitudinal projects, `form_name` uses `"Event Label : Form Label"` when
+#' labels are available.
 #'
 #' @param redcap_uri REDCap API URI.
 #' @param token REDCap API token.
 #'
-#' @returns A tibble with the project record ID field, `form_name`, and
-#'   `pct_complete`. Longitudinal projects also include `event_name`.
+#' @returns A tibble with one row per dashboard tile and these columns:
+#'   the project record ID field, `form_name`, and `pct_complete`.
+#'   Longitudinal projects also include `event_name`, the REDCap unique event
+#'   name.
 #'
 #' @examples
 #' \dontrun{
-#' record_status_dashboard(
+#' get_record_status_data(
 #'   redcap_uri = Sys.getenv("REDCAP_URI"),
 #'   token = Sys.getenv("REDCAP_TOKEN")
 #' )
 #' }
 #'
 #' @export
-record_status_dashboard <- function(redcap_uri, token) {
+get_record_status_data <- function(redcap_uri, token) {
   if (missing(redcap_uri)) {
     cli_abort("{.arg redcap_uri} and {.arg token} are required.")
   }
@@ -43,10 +61,21 @@ record_status_dashboard <- function(redcap_uri, token) {
     token = token
   )
 
-  get_record_status_dashboard(project)
+  get_record_status_tiles(project)
 }
 
-get_record_status_dashboard <- function(project) {
+#' Assemble the dashboard tile output from a normalized REDCap project
+#'
+#' @description
+#' Builds the full dashboard grid, joins summarized completion status onto it,
+#' and applies factor ordering for plotting.
+#'
+#' @param project A normalized project list from `get_quality_project()`.
+#'
+#' @returns A tibble with record, optional event, form, and completion columns.
+#'
+#' @noRd
+get_record_status_tiles <- function(project) {
   dashboard_grid <- get_dashboard_grid(project)
   completion_summary <- get_dashboard_status_summary(project)
 
@@ -82,6 +111,18 @@ get_record_status_dashboard <- function(project) {
   out
 }
 
+#' Build the record/event/form dashboard grid
+#'
+#' @description
+#' Creates the complete set of dashboard tiles expected from the API records and
+#' project metadata before completion status is joined.
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble with `record_id`, `event_name`, `form_name`, and
+#'   `display_form_name`.
+#'
+#' @noRd
 get_dashboard_grid <- function(project) {
   forms <- get_dashboard_forms(project)
   record_events <- get_dashboard_record_events(project)
@@ -113,6 +154,14 @@ get_dashboard_grid <- function(project) {
     select("record_id", "event_name", "form_name", "display_form_name")
 }
 
+#' Cross join two small dashboard metadata tables
+#'
+#' @param x A data frame.
+#' @param y A data frame.
+#'
+#' @returns A data frame containing every row combination from `x` and `y`.
+#'
+#' @noRd
 get_dashboard_cross_join <- function(x, y) {
   x |>
     mutate(.join_key = 1L) |>
@@ -124,6 +173,11 @@ get_dashboard_cross_join <- function(x, y) {
     select(-".join_key")
 }
 
+#' Empty dashboard grid
+#'
+#' @returns An empty tibble with the dashboard grid columns.
+#'
+#' @noRd
 get_empty_dashboard_grid <- function() {
   tibble(
     record_id = character(),
@@ -133,6 +187,13 @@ get_empty_dashboard_grid <- function() {
   )
 }
 
+#' Get dashboard forms in REDCap instrument order
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble with form names, display labels, and form order.
+#'
+#' @noRd
 get_dashboard_forms <- function(project) {
   forms <- project$metadata |>
     distinct(.data$form_name) |>
@@ -158,6 +219,13 @@ get_dashboard_forms <- function(project) {
     select("form_name", "form_label", "form_order")
 }
 
+#' Normalize REDCap instrument labels for dashboard display
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble with `form_name` and `form_label`.
+#'
+#' @noRd
 get_dashboard_instruments <- function(project) {
   instruments <- get_optional_api_table(project$instruments)
   if (nrow(instruments) == 0 && ncol(instruments) == 0) {
@@ -187,22 +255,19 @@ get_dashboard_instruments <- function(project) {
     distinct(.data$form_name, .keep_all = TRUE)
 }
 
+#' Get observed record/event pairs
+#'
+#' @description
+#' Uses all API rows so events represented only by repeating-instrument rows are
+#' included in the dashboard grid.
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble with `record_id` and `event_name`.
+#'
+#' @noRd
 get_dashboard_record_events <- function(project) {
   event_field <- get_event_field(project$data)
-
-  base_rows <- get_dashboard_base_row(project$data)
-
-  out <- project$data[base_rows, , drop = FALSE] |>
-    transmute(
-      record_id = as.character(.data[[project$record_id_field]]),
-      event_name = if (is.na(event_field)) NA_character_ else
-        as.character(.data[[event_field]])
-    ) |>
-    distinct(.data$record_id, .data$event_name)
-
-  if (nrow(out) > 0) {
-    return(out)
-  }
 
   project$data |>
     transmute(
@@ -213,14 +278,14 @@ get_dashboard_record_events <- function(project) {
     distinct(.data$record_id, .data$event_name)
 }
 
-get_dashboard_base_row <- function(data) {
-  if (!"redcap_repeat_instrument" %in% names(data)) {
-    return(rep(TRUE, nrow(data)))
-  }
-
-  get_is_missing(data$redcap_repeat_instrument)
-}
-
+#' Get event/form combinations enabled for dashboard display
+#'
+#' @inheritParams get_record_status_tiles
+#' @param forms Dashboard form metadata from `get_dashboard_forms()`.
+#'
+#' @returns A tibble with event and form display metadata.
+#'
+#' @noRd
 get_dashboard_event_forms <- function(project, forms) {
   event_field <- get_event_field(project$data)
   if (is.na(event_field)) {
@@ -249,6 +314,18 @@ get_dashboard_event_forms <- function(project, forms) {
     select("event_name", "event_label", "form_name", "form_label")
 }
 
+#' Get event/form pairs from REDCap event-instrument metadata
+#'
+#' @description
+#' Uses REDCap's event-instrument mapping when available. If REDCap does not
+#' return that table, falls back to every observed event crossed with every
+#' form.
+#'
+#' @inheritParams get_dashboard_event_forms
+#'
+#' @returns A tibble with `event_name` and `form_name`.
+#'
+#' @noRd
 get_dashboard_event_form_pairs <- function(project, forms) {
   event_instruments <- get_optional_api_table(project$event_instruments)
   if (
@@ -274,6 +351,13 @@ get_dashboard_event_form_pairs <- function(project, forms) {
   get_dashboard_cross_join(events, forms |> select("form_name"))
 }
 
+#' Get event labels in observed event order
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble with `event_name`, `event_label`, and `event_order`.
+#'
+#' @noRd
 get_dashboard_event_labels <- function(project) {
   event_field <- get_event_field(project$data)
   data_events <- project$data |>
@@ -305,6 +389,13 @@ get_dashboard_event_labels <- function(project) {
     arrange(.data$event_order)
 }
 
+#' Summarize dashboard completion status by tile
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble with one completion proportion per record/event/form tile.
+#'
+#' @noRd
 get_dashboard_status_summary <- function(project) {
   completion_status <- get_dashboard_status(project)
   if (nrow(completion_status) == 0) {
@@ -325,6 +416,17 @@ get_dashboard_status_summary <- function(project) {
     )
 }
 
+#' Collect raw dashboard completion status rows
+#'
+#' @description
+#' Finds REDCap `*_complete` fields and keeps only rows where that form can
+#' contribute to the dashboard tile.
+#'
+#' @inheritParams get_record_status_tiles
+#'
+#' @returns A tibble of normalized completion-status context rows.
+#'
+#' @noRd
 get_dashboard_status <- function(project) {
   completion_fields <- names(project$data)[str_detect(
     names(project$data),
@@ -354,6 +456,19 @@ get_dashboard_status <- function(project) {
   }))
 }
 
+#' Identify rows that can contribute to a form completion tile
+#'
+#' @description
+#' Repeating forms use matching `redcap_repeat_instrument` rows. Non-repeating
+#' forms use non-repeating rows. Both are limited to events where the form is
+#' enabled.
+#'
+#' @inheritParams get_record_status_tiles
+#' @param form_name REDCap form name.
+#'
+#' @returns A logical vector with one value per API data row.
+#'
+#' @noRd
 get_dashboard_completion_rows <- function(project, form_name) {
   repeat_form <- get_is_repeating_form(project, form_name)
   repeated_rows <- get_repeating_instrument_rows(project$data)
@@ -367,6 +482,13 @@ get_dashboard_completion_rows <- function(project, form_name) {
   rows & get_event_form_enabled_rows(project, form_name)
 }
 
+#' Determine whether a form is configured or observed as repeating
+#'
+#' @inheritParams get_dashboard_completion_rows
+#'
+#' @returns `TRUE` when `form_name` is a repeating instrument.
+#'
+#' @noRd
 get_is_repeating_form <- function(project, form_name) {
   if (
     "redcap_repeat_instrument" %in%
@@ -400,6 +522,14 @@ get_is_repeating_form <- function(project, form_name) {
   )
 }
 
+#' Convert completion status labels to a completion proportion
+#'
+#' @param value Character completion status values after normalization.
+#'
+#' @returns A numeric proportion complete or `NA_real_` when all values are
+#'   missing.
+#'
+#' @noRd
 get_dashboard_pct_complete <- function(value) {
   if (all(get_is_missing(value))) {
     return(NA_real_)

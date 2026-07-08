@@ -6,6 +6,8 @@
 #' group_by if_any if_else n n_distinct left_join mutate pull recode relocate
 #' rename right_join row_number rowwise select slice summarise transmute ungroup
 #' bind_cols first
+#' @importFrom ggplot2 aes element_blank element_text geom_tile ggplot labs
+#' scale_fill_gradientn scale_x_discrete scale_y_discrete theme theme_minimal
 #' @importFrom purrr map map2 map_chr map_int map_lgl pluck pmap_chr pmap
 #' flatten_chr map2_chr reduce
 #' @importFrom REDCapR redcap_arm_export redcap_event_instruments
