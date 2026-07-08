@@ -42,7 +42,16 @@
 #'   instance context when available from the REDCap export.
 #'   `summaries$project$raw_row_count` equals `nrow()` for the records returned
 #'   by the REDCap API. `summaries$project$field_count` is the count of distinct
-#'   standardized metadata field names.
+#'   standardized metadata field names. `summaries$fields$missing_rate` is the
+#'   field-level fraction missing among applicable rows.
+#'   `summaries$forms$missing_rate` and `summaries$project$missing_rate` are
+#'   weighted fractions missing across applicable field-row cells. Applicability
+#'   accounts for form availability, event-form mapping, repeating instrument
+#'   structure, and branching logic. Missingness is only assessed where the raw
+#'   REDCap form status column `<form_name>_complete` is `1`/Unverified or
+#'   `2`/Complete. Status `0`/Incomplete is handled by operational checks and
+#'   does not contribute to missingness, even when REDCap exports checkbox
+#'   choices as `0`.
 #'
 #' @examples
 #' \dontrun{
@@ -579,7 +588,7 @@ get_field_applicable_rows <- function(project, field) {
 
   metadata_row <- get_metadata_row(project, field)
 
-  get_form_applicable_rows(project, metadata_row$form_name) &
+  get_missingness_form_applicable_rows(project, metadata_row$form_name) &
     get_branching_applicable_rows(project, metadata_row$branching_logic)
 }
 
@@ -595,7 +604,7 @@ get_field_applicability <- function(project) {
 
   form_rows <- setNames(
     map(unique(field_metadata$form_name), \(form_name) {
-      get_form_applicable_rows(project, form_name)
+      get_missingness_form_applicable_rows(project, form_name)
     }),
     unique(field_metadata$form_name)
   )
@@ -637,6 +646,30 @@ get_form_applicable_rows <- function(project, form_name) {
         get_event_form_enabled_rows(project, form_name) &
         get_form_available_rows(project, form_name)
     )
+}
+
+get_missingness_form_applicable_rows <- function(project, form_name) {
+  repeated_rows <- get_repeating_instrument_rows(project$data)
+  matching_repeat_rows <- get_matching_repeat_rows(project$data, form_name)
+  nonrepeat_rows <- !repeated_rows
+
+  (
+    matching_repeat_rows |
+      (
+        nonrepeat_rows &
+          get_event_form_enabled_rows(project, form_name)
+      )
+  ) &
+    get_form_completion_assessed_rows(project$data, form_name)
+}
+
+get_form_completion_assessed_rows <- function(data, form_name) {
+  completion_field <- paste0(form_name, "_complete")
+  if (!completion_field %in% names(data)) {
+    return(rep(FALSE, nrow(data)))
+  }
+
+  get_completion_status_value(data[[completion_field]]) %in% c("Unverified", "Complete")
 }
 
 get_repeating_instrument_rows <- function(data) {
@@ -1161,7 +1194,7 @@ get_project_summary <- function(project, findings, field_summary) {
     form_count = n_distinct(project$metadata$form_name),
     event_count = get_project_event_count(project),
     repeating_enabled = get_repeating_enabled(project),
-    mean_missing_rate = if (nrow(field_summary) == 0) NA_real_ else mean(field_summary$missing_rate, na.rm = TRUE),
+    missing_rate = get_weighted_missing_rate(field_summary$missing_count, field_summary$record_count),
     finding_count = nrow(findings)
   )
 
@@ -1212,7 +1245,7 @@ get_form_summary <- function(project, field_summary) {
       form_name = character(),
       field_count = integer(),
       required_field_count = integer(),
-      mean_missing_rate = numeric()
+      missing_rate = numeric()
     ))
   }
 
@@ -1221,9 +1254,18 @@ get_form_summary <- function(project, field_summary) {
     summarise(
       field_count = n(),
       required_field_count = sum(.data$required_field),
-      mean_missing_rate = mean(.data$missing_rate, na.rm = TRUE),
+      missing_rate = get_weighted_missing_rate(.data$missing_count, .data$record_count),
       .groups = "drop"
     )
+}
+
+get_weighted_missing_rate <- function(missing_count, record_count) {
+  denominator <- sum(record_count, na.rm = TRUE)
+  if (denominator == 0) {
+    NA_real_
+  } else {
+    sum(missing_count, na.rm = TRUE) / denominator
+  }
 }
 
 get_record_summary <- function(project, findings) {
