@@ -539,7 +539,7 @@ get_record_id_field_report <- function(data, metadata) {
 }
 
 get_field_summary <- function(project) {
-  fields <- project$metadata$field_name[project$metadata$field_name %in% names(project$data)]
+  fields <- get_represented_fields(project)
 
   if (length(fields) == 0) {
     return(tibble(
@@ -560,7 +560,7 @@ get_field_summary <- function(project) {
       filter(.data$field_name == field) |>
       slice(1)
     field_rows <- get_field_applicable_rows(project, field)
-    value <- project$data[[field]][field_rows]
+    value <- get_field_values(project, field)[field_rows]
     missing <- get_is_missing(value)
 
     tibble(
@@ -593,7 +593,7 @@ get_field_applicable_rows <- function(project, field) {
 }
 
 get_field_applicability <- function(project) {
-  fields <- project$metadata$field_name[project$metadata$field_name %in% names(project$data)]
+  fields <- get_represented_fields(project)
   if (length(fields) == 0) {
     return(list())
   }
@@ -633,6 +633,37 @@ get_field_applicability <- function(project) {
 get_project_field_applicability <- function(project) {
   project$field_applicability <- get_field_applicability(project)
   project
+}
+
+get_represented_fields <- function(project) {
+  project$metadata$field_name[
+    map_lgl(project$metadata$field_name, \(field) {
+      field %in% names(project$data) ||
+        any(startsWith(names(project$data), paste0(field, "___")))
+    })
+  ]
+}
+
+get_field_values <- function(project, field) {
+  if (field %in% names(project$data)) {
+    return(project$data[[field]])
+  }
+
+  checkbox_columns <- names(project$data)[startsWith(names(project$data), paste0(field, "___"))]
+  if (length(checkbox_columns) == 0) {
+    return(rep(NA_character_, nrow(project$data)))
+  }
+
+  checked <- as.data.frame(map(project$data[checkbox_columns], get_is_checked))
+  checked_names <- sub(paste0("^", field, "___"), "", checkbox_columns)
+  map_chr(seq_len(nrow(checked)), \(row) {
+    row_checked <- unlist(checked[row, ], use.names = FALSE)
+    if (!any(row_checked, na.rm = TRUE)) {
+      return(NA_character_)
+    }
+
+    paste(checked_names[row_checked], collapse = ", ")
+  })
 }
 
 get_form_applicable_rows <- function(project, form_name) {
@@ -753,13 +784,13 @@ get_form_data_columns <- function(project, form_name) {
 
 get_missingness_findings <- function(project, field_summary, sparse_threshold) {
   required_fields <- project$metadata |>
-    filter(.data$required_field, .data$field_name %in% names(project$data)) |>
+    filter(.data$required_field, .data$field_name %in% get_represented_fields(project)) |>
     pull(.data$field_name)
 
   required_findings <- bind_rows(map(required_fields, \(field) {
     metadata_row <- get_metadata_row(project, field)
     field_rows <- get_field_applicable_rows(project, field)
-    missing <- get_is_missing(project$data[[field]]) & field_rows
+    missing <- get_is_missing(get_field_values(project, field)) & field_rows
     if (!any(missing)) {
       return(get_empty_findings())
     }
@@ -1029,7 +1060,7 @@ get_future_date_findings <- function(project) {
 
   bind_rows(map(seq_len(nrow(date_fields)), \(index) {
     field <- date_fields$field_name[[index]]
-    value <- as.Date(project$data[[field]])
+    value <- get_date_values(project$data[[field]])
     future <- !is.na(value) & value > Sys.Date()
 
     if (!any(future)) {
@@ -1052,6 +1083,22 @@ get_future_date_findings <- function(project) {
       message = paste("Date field", field, "contains a future date.")
     )
   }))
+}
+
+get_date_values <- function(value) {
+  value <- as.character(value)
+  parsed <- vapply(value, \(x) {
+    if (get_is_missing(x)) {
+      return(NA_character_)
+    }
+
+    as.character(tryCatch(
+      suppressWarnings(as.Date(x)),
+      error = function(cnd) as.Date(NA)
+    ))
+  }, character(1))
+
+  as.Date(parsed)
 }
 
 get_operational_findings <- function(project) {
@@ -1269,7 +1316,7 @@ get_weighted_missing_rate <- function(missing_count, record_count) {
 }
 
 get_record_summary <- function(project, findings) {
-  fields <- project$metadata$field_name[project$metadata$field_name %in% names(project$data)]
+  fields <- get_represented_fields(project)
 
   if (length(fields) == 0) {
     return(tibble(
@@ -1281,7 +1328,7 @@ get_record_summary <- function(project, findings) {
 
   missing_matrix <- as.data.frame(map(fields, \(field) {
     field_rows <- get_field_applicable_rows(project, field)
-    get_is_missing(project$data[[field]]) & field_rows
+    get_is_missing(get_field_values(project, field)) & field_rows
   }))
   out <- tibble(
     record_id = as.character(project$data[[project$record_id_field]]),
