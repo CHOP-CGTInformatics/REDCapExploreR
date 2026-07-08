@@ -36,7 +36,16 @@ A list with \code{findings}, \code{summaries}, and \code{metadata} elements.
 instance context when available from the REDCap export.
 \code{summaries$project$raw_row_count} equals \code{nrow()} for the records returned
 by the REDCap API. \code{summaries$project$field_count} is the count of distinct
-standardized metadata field names.
+standardized metadata field names. \code{summaries$fields$missing_rate} is the
+field-level fraction missing among applicable rows.
+\code{summaries$forms$missing_rate} and \code{summaries$project$missing_rate} are
+weighted fractions missing across applicable field-row cells. Applicability
+accounts for form availability, event-form mapping, repeating instrument
+structure, and branching logic. Missingness is only assessed where the raw
+REDCap form status column \verb{<form_name>_complete} is \code{1}/Unverified or
+\code{2}/Complete. Status \code{0}/Incomplete is handled by operational checks and
+does not contribute to missingness, even when REDCap exports checkbox
+choices as \code{0}.
 }
 \description{
 \code{build_quality_report()} pulls a REDCap project through the API, applies
