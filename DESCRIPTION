@@ -1,15 +1,29 @@
 Package: REDCapExploreR
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Exploratory Data Quality Tools for REDCap Projects
 Version: 0.1.0
 Author: Who wrote it
 Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Depends:
+    R (>= 4.1.0)
+Description: Provides tools to explore REDCap projects, summarize project
+    structure, and flag common data quality issues for data managers.
 License: What license is it under?
 Encoding: UTF-8
-LazyData: true
 Imports: 
+    cli,
+    dplyr,
+    ggplot2,
+    purrr,
     REDCapR,
-    REDCapTidieR
-RoxygenNote: 7.3.2
+    rlang,
+    stats,
+    stringr,
+    tibble,
+    tidyr,
+    tidyselect
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3

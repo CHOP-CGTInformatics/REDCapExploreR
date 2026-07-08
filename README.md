@@ -11,7 +11,7 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 
 The goal of REDCapExploreR is to provide users with tools to
 post-process and perform exploratory data analysis on REDCap project
-data. It is intended to work hand in hand with the REDCapTidieR package.
+data through the REDCap API.
 
 This repository is in early stages active development!
 
@@ -35,5 +35,27 @@ library(REDCapExploreR)
 ### Recreating a Project’s Record Status Dashboard
 
 ``` r
-data <- record_status_dashboard(redcap_uri = Sys.getenv("REDCAP_URI"), token = token)
+redcap_uri <- Sys.getenv("REDCAP_URI")
+token <- Sys.getenv("REDCAP_TOKEN")
+
+data <- get_record_status_data(redcap_uri = redcap_uri, token = token)
+
+plot_record_status(data)
+```
+
+For larger projects, use compact mode to reduce x-axis text size, truncate long
+form labels, and draw lighter tile borders.
+
+``` r
+plot_record_status(data, mode = "compact")
+
+plot_record_status(data, mode = "compact", form_label_max = 20)
+```
+
+Because `plot_record_status()` returns a ggplot object, you can add standard
+ggplot2 layers to customize the display.
+
+``` r
+plot_record_status(data) +
+  ggplot2::labs(title = "REDCap Record Status")
 ```
