@@ -132,7 +132,13 @@ test_that("build_codebook returns structured codebook tables", {
     instrument_name = "visit",
     unique_event_name = "followup_arm_1"
   )
-  project_info <- tibble::tibble(project_title = "Example Codebook")
+  project_info <- tibble::tibble(
+    project_id = 42,
+    project_title = "Example Codebook",
+    in_production = FALSE,
+    project_language = "English",
+    surveys_enabled = TRUE
+  )
 
   codebook <- build_mock_codebook(
     metadata = metadata,
@@ -159,6 +165,9 @@ test_that("build_codebook returns structured codebook tables", {
   expect_equal(nrow(codebook$fields), 4)
   expect_equal(nrow(codebook$choices), 5)
   expect_equal(codebook$project$project_title, "Example Codebook")
+  expect_equal(codebook$project$project_id, 42)
+  expect_equal(codebook$project$project_language, "English")
+  expect_true(codebook$project$surveys_enabled)
   expect_equal(codebook$project$field_count, 4)
   expect_equal(codebook$project$form_count, 2)
   expect_equal(codebook$project$event_count, 2)
@@ -317,16 +326,46 @@ test_that("view_codebook returns a browsable HTML object", {
     field_label = c("Record ID", "Status"),
     select_choices_or_calculations = c(NA, "1, Open | 2, Closed")
   )
-  codebook <- build_mock_codebook(metadata)
+  project_info <- tibble::tibble(
+    project_id = 42,
+    project_title = "Viewer Test Project",
+    in_production = FALSE,
+    project_language = "English",
+    surveys_enabled = TRUE
+  )
+  codebook <- build_mock_codebook(metadata, project_info = project_info)
 
   viewer <- view_codebook(codebook, page_length = 5)
 
   expect_s3_class(viewer, "shiny.tag.list")
   expect_true(isTRUE(attr(viewer, "browsable_html")))
+  expect_match(as.character(viewer), "Viewer Test Project")
   expect_match(as.character(viewer), "REDCap Codebook")
+  expect_match(as.character(viewer), "searched, sorted, paged")
+  expect_false(grepl(
+    "Link to Project Home",
+    as.character(viewer),
+    fixed = TRUE
+  ))
+  expect_match(as.character(viewer), "redcap-codebook-summary")
+  expect_match(as.character(viewer), "redcap-codebook-project-details")
+  expect_match(as.character(viewer), "Project ID")
+  expect_match(as.character(viewer), "Project features")
+  expect_match(as.character(viewer), "Surveys enabled")
   expect_match(as.character(viewer), "data-section=\"fields\"")
   expect_match(as.character(viewer), "data-section=\"choices\"")
-  expect_match(as.character(viewer), "Event Instruments")
+  expect_match(as.character(viewer), "redcap-codebook-tab-count")
+  expect_match(as.character(viewer), "2 rows")
+  expect_match(as.character(viewer), "redcap-codebook-table-panel")
+  expect_false(grepl(
+    "data-section=\"events\"",
+    as.character(viewer),
+    fixed = TRUE
+  ))
+  expect_false(grepl("Event Instruments", as.character(viewer), fixed = TRUE))
+  expect_false(
+    grepl("data-section=\"repeating\"", as.character(viewer), fixed = TRUE)
+  )
   expect_match(as.character(viewer), "role=\"tabpanel\"")
   expect_false(grepl("Back to top", as.character(viewer), fixed = TRUE))
   expect_match(as.character(viewer), "status")
@@ -335,6 +374,11 @@ test_that("view_codebook returns a browsable HTML object", {
   expect_match(viewer_head, "HTMLWidgets.staticRender")
   expect_match(viewer_head, "columns.adjust")
   expect_match(viewer_head, "scrollIntoView")
+  expect_match(viewer_head, "position: sticky")
+  expect_match(viewer_head, "redcap-codebook-summary-item")
+  expect_match(viewer_head, "redcap-codebook-table thead th")
+  expect_match(viewer_head, "redcap-codebook-project-detail-table")
+  expect_match(viewer_head, "redcap-codebook-row-selected")
   expect_false(grepl("window.location.hash =", viewer_head, fixed = TRUE))
 })
 
@@ -349,12 +393,16 @@ test_that("view_codebook includes section descriptions", {
 
   viewer <- view_codebook(codebook)
 
-  expect_match(as.character(viewer), "One row of project-level summary")
+  expect_match(as.character(viewer), "A one-row overview")
   expect_match(as.character(viewer), "One row per REDCap field")
   expect_match(as.character(viewer), "One row per REDCap instrument")
+  expect_match(
+    as.character(viewer),
+    "No coded choice options were found in this project."
+  )
 })
 
-test_that("view_codebook renders empty optional sections without error", {
+test_that("view_codebook omits empty optional event and repeating sections", {
   metadata <- tibble::tibble(
     field_name = "record_id",
     form_name = "main",
@@ -364,7 +412,55 @@ test_that("view_codebook renders empty optional sections without error", {
   codebook <- build_mock_codebook(metadata)
 
   expect_no_error(viewer <- view_codebook(codebook))
-  expect_match(as.character(viewer), "No rows available")
+  expect_false(grepl(
+    "data-section=\"events\"",
+    as.character(viewer),
+    fixed = TRUE
+  ))
+  expect_false(
+    grepl(
+      "data-section=\"event_instruments\"",
+      as.character(viewer),
+      fixed = TRUE
+    )
+  )
+  expect_false(
+    grepl("data-section=\"repeating\"", as.character(viewer), fixed = TRUE)
+  )
+})
+
+test_that("view_codebook includes populated optional sections", {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "visit_date"),
+    form_name = c("main", "visit"),
+    field_type = c("text", "text"),
+    field_label = c("Record ID", "Visit Date")
+  )
+  events <- tibble::tibble(
+    event_name = "Baseline",
+    arm_num = 1,
+    unique_event_name = "baseline_arm_1"
+  )
+  event_instruments <- tibble::tibble(
+    unique_event_name = "baseline_arm_1",
+    instrument = "visit"
+  )
+  repeating <- tibble::tibble(
+    unique_event_name = "baseline_arm_1",
+    instrument_name = "visit"
+  )
+  codebook <- build_mock_codebook(
+    metadata = metadata,
+    events = events,
+    event_instruments = event_instruments,
+    repeating_instruments = repeating
+  )
+
+  viewer <- view_codebook(codebook)
+
+  expect_match(as.character(viewer), "data-section=\"events\"")
+  expect_match(as.character(viewer), "data-section=\"event_instruments\"")
+  expect_match(as.character(viewer), "data-section=\"repeating\"")
 })
 
 test_that("view_codebook escapes REDCap metadata values as text", {

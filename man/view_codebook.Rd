@@ -20,7 +20,8 @@ tables.
 into a static HTML viewer with tab-style section navigation and one
 interactive table per codebook section. The returned object prints in the
 RStudio/Posit Viewer and can be saved as an HTML file with
-\code{\link[htmltools:save_html]{htmltools::save_html()}}.
+\code{\link[htmltools:save_html]{htmltools::save_html()}}. Event, event-instrument, and repeating-structure
+sections are omitted when those API tables are empty.
 }
 \examples{
 \dontrun{
