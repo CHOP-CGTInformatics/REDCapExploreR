@@ -62,22 +62,30 @@
 #' }
 #'
 #' @export
-build_quality_report <- function(redcap_uri,
-                                 token,
-                                 checks = c(
-                                   "missingness",
-                                   "metadata",
-                                   "outliers",
-                                   "operational",
-                                   "consistency"
-                                 ),
-                                 sparse_threshold = 0.95,
-                                 outlier_iqr_multiplier = 3,
-                                 progress = c("auto", "none", "show")) {
+build_quality_report <- function(
+  redcap_uri,
+  token,
+  checks = c(
+    "missingness",
+    "metadata",
+    "outliers",
+    "operational",
+    "consistency"
+  ),
+  sparse_threshold = 0.95,
+  outlier_iqr_multiplier = 3,
+  progress = c("auto", "none", "show")
+) {
   progress <- match.arg(progress)
   checks <- match.arg(
     checks,
-    choices = c("missingness", "metadata", "outliers", "operational", "consistency"),
+    choices = c(
+      "missingness",
+      "metadata",
+      "outliers",
+      "operational",
+      "consistency"
+    ),
     several.ok = TRUE
   )
 
@@ -104,16 +112,32 @@ build_quality_report <- function(redcap_uri,
     redcap_uri = redcap_uri,
     token = token
   )
-  update_report_progress(progress_bar, progress_enabled, progress_force, "Normalized input")
+  update_report_progress(
+    progress_bar,
+    progress_enabled,
+    progress_force,
+    "Normalized input"
+  )
 
   project <- get_project_field_applicability(project)
-  update_report_progress(progress_bar, progress_enabled, progress_force, "Built applicability map")
+  update_report_progress(
+    progress_bar,
+    progress_enabled,
+    progress_force,
+    "Built applicability map"
+  )
 
   field_summary <- get_field_summary(project)
-  update_report_progress(progress_bar, progress_enabled, progress_force, "Built field summaries")
+  update_report_progress(
+    progress_bar,
+    progress_enabled,
+    progress_force,
+    "Built field summaries"
+  )
 
   check_fns <- list(
-    missingness = \(...) get_missingness_findings(project, field_summary, sparse_threshold),
+    missingness = \(...)
+      get_missingness_findings(project, field_summary, sparse_threshold),
     metadata = \(...) get_metadata_findings(project),
     outliers = \(...) get_outlier_findings(project, outlier_iqr_multiplier),
     operational = \(...) get_operational_findings(project),
@@ -139,7 +163,12 @@ build_quality_report <- function(redcap_uri,
       mutate(finding_id = row_number()) |>
       relocate("finding_id")
   }
-  update_report_progress(progress_bar, progress_enabled, progress_force, "Assembled findings")
+  update_report_progress(
+    progress_bar,
+    progress_enabled,
+    progress_force,
+    "Assembled findings"
+  )
 
   summaries <- list(
     project = get_project_summary(project, findings, field_summary),
@@ -148,7 +177,12 @@ build_quality_report <- function(redcap_uri,
     records = get_record_summary(project, findings),
     events = get_event_summary(project)
   )
-  update_report_progress(progress_bar, progress_enabled, progress_force, "Built summaries")
+  update_report_progress(
+    progress_bar,
+    progress_enabled,
+    progress_force,
+    "Built summaries"
+  )
 
   report_metadata <- list(
     fields = project$metadata,
@@ -164,7 +198,12 @@ build_quality_report <- function(redcap_uri,
     record_id_field = project$record_id_field,
     source = project$source
   )
-  update_report_progress(progress_bar, progress_enabled, progress_force, "Built metadata")
+  update_report_progress(
+    progress_bar,
+    progress_enabled,
+    progress_force,
+    "Built metadata"
+  )
 
   report <- list(
     findings = findings,
@@ -206,8 +245,16 @@ pull_redcap_project <- function(redcap_uri, token) {
     data = get_redcapr_data(data_result, "records"),
     metadata = get_redcapr_data(metadata_result, "metadata"),
     events = get_optional_redcapr_data(redcap_event_read, redcap_uri, token),
-    event_instruments = get_optional_redcapr_data(redcap_event_instruments, redcap_uri, token),
-    instruments = get_optional_redcapr_data(redcap_instruments, redcap_uri, token),
+    event_instruments = get_optional_redcapr_data(
+      redcap_event_instruments,
+      redcap_uri,
+      token
+    ),
+    instruments = get_optional_redcapr_data(
+      redcap_instruments,
+      redcap_uri,
+      token
+    ),
     repeating_instruments = get_optional_redcapr_data(
       redcap_instrument_repeating,
       redcap_uri,
@@ -270,7 +317,11 @@ get_progress_bar <- function(enabled, total_steps) {
     name = "Building REDCap quality report",
     total = total_steps,
     format = "{cli::pb_name}{cli::pb_bar} {cli::pb_percent} | {cli::pb_status}",
-    format_done = paste0("{cli::pb_name}{cli::pb_percent} | ", symbol$tick, " Complete"),
+    format_done = paste0(
+      "{cli::pb_name}{cli::pb_percent} | ",
+      symbol$tick,
+      " Complete"
+    ),
     clear = FALSE,
     auto_terminate = FALSE,
     .envir = progress_env
@@ -319,17 +370,27 @@ get_quality_project <- function(redcap_uri, token) {
 }
 
 get_api_project <- function(project) {
-  if (!is.list(project) || is.data.frame(project) || !all(c("data", "metadata") %in% names(project))) {
-    cli_abort("The REDCap API pull must return {.field data} and {.field metadata} tables.")
+  if (
+    !is.list(project) ||
+      is.data.frame(project) ||
+      !all(c("data", "metadata") %in% names(project))
+  ) {
+    cli_abort(
+      "The REDCap API pull must return {.field data} and {.field metadata} tables."
+    )
   }
 
   out <- list(
     data = get_required_api_table(project$data, "records"),
     metadata = get_standard_metadata(project$metadata),
     events = get_standard_events(project$events),
-    event_instruments = get_standard_event_instruments(project$event_instruments),
+    event_instruments = get_standard_event_instruments(
+      project$event_instruments
+    ),
     instruments = get_optional_api_table(project$instruments),
-    repeating_instruments = get_optional_api_table(project$repeating_instruments),
+    repeating_instruments = get_optional_api_table(
+      project$repeating_instruments
+    ),
     instrument_structure = tibble(),
     source = "api"
   )
@@ -340,7 +401,9 @@ get_api_project <- function(project) {
 
 get_drop_descriptive_fields <- function(project) {
   descriptive_fields <- project$metadata |>
-    filter(tolower(.data$field_type) %in% c("descriptive", "descriptive_text")) |>
+    filter(
+      tolower(.data$field_type) %in% c("descriptive", "descriptive_text")
+    ) |>
     pull(.data$field_name)
 
   if (length(descriptive_fields) == 0) {
@@ -383,7 +446,10 @@ get_standard_events <- function(events) {
 
   names(events) <- get_clean_names(names(events))
 
-  if (!"redcap_event_name" %in% names(events) && "unique_event_name" %in% names(events)) {
+  if (
+    !"redcap_event_name" %in% names(events) &&
+      "unique_event_name" %in% names(events)
+  ) {
     events <- events |>
       mutate(redcap_event_name = as.character(.data$unique_event_name))
   }
@@ -404,17 +470,34 @@ get_standard_event_instruments <- function(event_instruments) {
 
   names(event_instruments) <- get_clean_names(names(event_instruments))
 
-  if (!"form_name" %in% names(event_instruments) && "form" %in% names(event_instruments)) {
+  if (
+    !"form_name" %in% names(event_instruments) &&
+      "form" %in% names(event_instruments)
+  ) {
     event_instruments <- event_instruments |>
       mutate(form_name = as.character(.data$form))
   }
 
-  if (!"redcap_event_name" %in% names(event_instruments) && "unique_event_name" %in% names(event_instruments)) {
+  if (
+    !"form_name" %in% names(event_instruments) &&
+      "instrument" %in% names(event_instruments)
+  ) {
+    event_instruments <- event_instruments |>
+      mutate(form_name = as.character(.data$instrument))
+  }
+
+  if (
+    !"redcap_event_name" %in% names(event_instruments) &&
+      "unique_event_name" %in% names(event_instruments)
+  ) {
     event_instruments <- event_instruments |>
       mutate(redcap_event_name = as.character(.data$unique_event_name))
   }
 
-  if (!"redcap_arm" %in% names(event_instruments) && "arm_num" %in% names(event_instruments)) {
+  if (
+    !"redcap_arm" %in% names(event_instruments) &&
+      "arm_num" %in% names(event_instruments)
+  ) {
     event_instruments <- event_instruments |>
       mutate(redcap_arm = as.character(.data$arm_num))
   }
@@ -498,7 +581,8 @@ get_metadata_names <- function(names) {
 get_validate_project <- function(project) {
   represented_fields <- project$metadata$field_name[
     map_lgl(project$metadata$field_name, \(field) {
-      field %in% names(project$data) ||
+      field %in%
+        names(project$data) ||
         any(startsWith(names(project$data), paste0(field, "___")))
     })
   ]
@@ -514,8 +598,14 @@ get_validate_project <- function(project) {
 }
 
 get_validate_thresholds <- function(sparse_threshold, outlier_iqr_multiplier) {
-  if (!is.numeric(sparse_threshold) || sparse_threshold <= 0 || sparse_threshold > 1) {
-    cli_abort("{.arg sparse_threshold} must be a number greater than 0 and less than or equal to 1.")
+  if (
+    !is.numeric(sparse_threshold) ||
+      sparse_threshold <= 0 ||
+      sparse_threshold > 1
+  ) {
+    cli_abort(
+      "{.arg sparse_threshold} must be a number greater than 0 and less than or equal to 1."
+    )
   }
 
   if (!is.numeric(outlier_iqr_multiplier) || outlier_iqr_multiplier <= 0) {
@@ -582,7 +672,11 @@ get_field_rows <- function(project, form_name) {
 }
 
 get_field_applicable_rows <- function(project, field) {
-  if ("field_applicability" %in% names(project) && field %in% names(project$field_applicability)) {
+  if (
+    "field_applicability" %in%
+      names(project) &&
+      field %in% names(project$field_applicability)
+  ) {
     return(project$field_applicability[[field]])
   }
 
@@ -610,24 +704,27 @@ get_field_applicability <- function(project) {
   )
   branching_rows <- new.env(parent = emptyenv())
 
-  setNames(map(fields, \(field) {
-    metadata_row <- field_metadata |>
-      filter(.data$field_name == field) |>
-      slice(1)
-    logic_key <- as.character(metadata_row$branching_logic)
-    if (get_is_missing(logic_key)) {
-      logic_key <- "__missing_branching_logic__"
-    }
+  setNames(
+    map(fields, \(field) {
+      metadata_row <- field_metadata |>
+        filter(.data$field_name == field) |>
+        slice(1)
+      logic_key <- as.character(metadata_row$branching_logic)
+      if (get_is_missing(logic_key)) {
+        logic_key <- "__missing_branching_logic__"
+      }
 
-    if (!exists(logic_key, envir = branching_rows, inherits = FALSE)) {
-      branching_rows[[logic_key]] <- get_branching_applicable_rows(
-        project = project,
-        logic = metadata_row$branching_logic
-      )
-    }
+      if (!exists(logic_key, envir = branching_rows, inherits = FALSE)) {
+        branching_rows[[logic_key]] <- get_branching_applicable_rows(
+          project = project,
+          logic = metadata_row$branching_logic
+        )
+      }
 
-    form_rows[[metadata_row$form_name]] & branching_rows[[logic_key]]
-  }), fields)
+      form_rows[[metadata_row$form_name]] & branching_rows[[logic_key]]
+    }),
+    fields
+  )
 }
 
 get_project_field_applicability <- function(project) {
@@ -638,7 +735,8 @@ get_project_field_applicability <- function(project) {
 get_represented_fields <- function(project) {
   project$metadata$field_name[
     map_lgl(project$metadata$field_name, \(field) {
-      field %in% names(project$data) ||
+      field %in%
+        names(project$data) ||
         any(startsWith(names(project$data), paste0(field, "___")))
     })
   ]
@@ -649,7 +747,10 @@ get_field_values <- function(project, field) {
     return(project$data[[field]])
   }
 
-  checkbox_columns <- names(project$data)[startsWith(names(project$data), paste0(field, "___"))]
+  checkbox_columns <- names(project$data)[startsWith(
+    names(project$data),
+    paste0(field, "___")
+  )]
   if (length(checkbox_columns) == 0) {
     return(rep(NA_character_, nrow(project$data)))
   }
@@ -672,11 +773,9 @@ get_form_applicable_rows <- function(project, form_name) {
   nonrepeat_rows <- !repeated_rows
 
   matching_repeat_rows |
-    (
-      nonrepeat_rows &
-        get_event_form_enabled_rows(project, form_name) &
-        get_form_available_rows(project, form_name)
-    )
+    (nonrepeat_rows &
+      get_event_form_enabled_rows(project, form_name) &
+      get_form_available_rows(project, form_name))
 }
 
 get_missingness_form_applicable_rows <- function(project, form_name) {
@@ -684,13 +783,9 @@ get_missingness_form_applicable_rows <- function(project, form_name) {
   matching_repeat_rows <- get_matching_repeat_rows(project$data, form_name)
   nonrepeat_rows <- !repeated_rows
 
-  (
-    matching_repeat_rows |
-      (
-        nonrepeat_rows &
-          get_event_form_enabled_rows(project, form_name)
-      )
-  ) &
+  (matching_repeat_rows |
+    (nonrepeat_rows &
+      get_event_form_enabled_rows(project, form_name))) &
     get_form_completion_assessed_rows(project$data, form_name)
 }
 
@@ -700,7 +795,8 @@ get_form_completion_assessed_rows <- function(data, form_name) {
     return(rep(FALSE, nrow(data)))
   }
 
-  get_completion_status_value(data[[completion_field]]) %in% c("Unverified", "Complete")
+  get_completion_status_value(data[[completion_field]]) %in%
+    c("Unverified", "Complete")
 }
 
 get_repeating_instrument_rows <- function(data) {
@@ -726,7 +822,10 @@ get_event_form_enabled_rows <- function(project, form_name) {
   if (
     is.na(event_field) ||
       nrow(project$event_instruments) == 0 ||
-      !all(c("form_name", "redcap_event_name") %in% names(project$event_instruments))
+      !all(
+        c("form_name", "redcap_event_name") %in%
+          names(project$event_instruments)
+      )
   ) {
     return(rep(TRUE, nrow(project$data)))
   }
@@ -740,7 +839,10 @@ get_event_form_enabled_rows <- function(project, form_name) {
 }
 
 get_form_available_rows <- function(project, form_name) {
-  completion_available <- get_form_completion_available_rows(project$data, form_name)
+  completion_available <- get_form_completion_available_rows(
+    project$data,
+    form_name
+  )
   field_columns <- get_form_data_columns(project, form_name)
 
   if (length(field_columns) == 0) {
@@ -784,7 +886,10 @@ get_form_data_columns <- function(project, form_name) {
 
 get_missingness_findings <- function(project, field_summary, sparse_threshold) {
   required_fields <- project$metadata |>
-    filter(.data$required_field, .data$field_name %in% get_represented_fields(project)) |>
+    filter(
+      .data$required_field,
+      .data$field_name %in% get_represented_fields(project)
+    ) |>
     pull(.data$field_name)
 
   required_findings <- bind_rows(map(required_fields, \(field) {
@@ -800,7 +905,9 @@ get_missingness_findings <- function(project, field_summary, sparse_threshold) {
       issue = "required_field_missing",
       severity = "warning",
       scope = "record_field",
-      record_id = as.character(project$data[[project$record_id_field]][missing]),
+      record_id = as.character(project$data[[project$record_id_field]][
+        missing
+      ]),
       form_name = metadata_row$form_name,
       event_name = get_event_values(project$data, missing),
       repeat_instrument = get_repeat_instrument_values(project$data, missing),
@@ -813,7 +920,11 @@ get_missingness_findings <- function(project, field_summary, sparse_threshold) {
   }))
 
   sparse_findings <- field_summary |>
-    filter(!is.na(.data$missing_rate), .data$missing_rate >= sparse_threshold, .data$record_count > 0) |>
+    filter(
+      !is.na(.data$missing_rate),
+      .data$missing_rate >= sparse_threshold,
+      .data$record_count > 0
+    ) |>
     transmute(
       check = "missingness",
       issue = "unexpected_sparse_field",
@@ -825,7 +936,11 @@ get_missingness_findings <- function(project, field_summary, sparse_threshold) {
       field_name = .data$field_name,
       value = as.character(round(.data$missing_rate, 4)),
       expected = paste("Missing rate below", sparse_threshold),
-      message = paste("Field", .data$field_name, "is sparse by heuristic threshold.")
+      message = paste(
+        "Field",
+        .data$field_name,
+        "is sparse by heuristic threshold."
+      )
     )
 
   bind_rows(required_findings, sparse_findings)
@@ -890,7 +1005,11 @@ get_metadata_findings <- function(project) {
       field_name = .data$field_name,
       value = NA_character_,
       expected = "REDCap choice definition",
-      message = paste("Choice field", .data$field_name, "does not define choices.")
+      message = paste(
+        "Choice field",
+        .data$field_name,
+        "does not define choices."
+      )
     )
 
   branch_orphans <- get_branching_orphans(metadata)
@@ -927,7 +1046,10 @@ get_branching_orphans <- function(metadata) {
       field_name = metadata$field_name[[index]],
       value = paste(missing_refs, collapse = ", "),
       expected = "Branching references present in metadata",
-      message = paste("Branching logic references missing field(s):", paste(missing_refs, collapse = ", "))
+      message = paste(
+        "Branching logic references missing field(s):",
+        paste(missing_refs, collapse = ", ")
+      )
     )
   }))
 }
@@ -952,7 +1074,11 @@ get_high_risk_text_findings <- function(metadata) {
       field_name = .data$field_name,
       value = .data$field_label,
       expected = "Review free-text PHI risk",
-      message = paste("Free-text field", .data$field_name, "may warrant data manager review.")
+      message = paste(
+        "Free-text field",
+        .data$field_name,
+        "may warrant data manager review."
+      )
     )
 }
 
@@ -968,14 +1094,19 @@ get_range_findings <- function(project) {
   metadata <- project$metadata |>
     filter(
       .data$field_name %in% names(project$data),
-      !get_is_missing(.data$text_validation_min) | !get_is_missing(.data$text_validation_max)
+      !get_is_missing(.data$text_validation_min) |
+        !get_is_missing(.data$text_validation_max)
     )
 
   bind_rows(map(seq_len(nrow(metadata)), \(index) {
     field <- metadata$field_name[[index]]
     value <- suppressWarnings(as.numeric(project$data[[field]]))
-    min_value <- suppressWarnings(as.numeric(metadata$text_validation_min[[index]]))
-    max_value <- suppressWarnings(as.numeric(metadata$text_validation_max[[index]]))
+    min_value <- suppressWarnings(as.numeric(metadata$text_validation_min[[
+      index
+    ]]))
+    max_value <- suppressWarnings(as.numeric(metadata$text_validation_max[[
+      index
+    ]]))
     low <- !is.na(value) & !is.na(min_value) & value < min_value
     high <- !is.na(value) & !is.na(max_value) & value > max_value
     bad <- low | high
@@ -1004,7 +1135,8 @@ get_range_findings <- function(project) {
 
 get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
   fields <- project$metadata$field_name[
-    project$metadata$field_name %in% names(project$data) &
+    project$metadata$field_name %in%
+      names(project$data) &
       project$metadata$field_name != project$record_id_field
   ]
 
@@ -1035,7 +1167,9 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
       issue = "numeric_iqr_outlier",
       severity = "info",
       scope = "record_field",
-      record_id = as.character(project$data[[project$record_id_field]][outlier]),
+      record_id = as.character(project$data[[project$record_id_field]][
+        outlier
+      ]),
       form_name = metadata_row$form_name,
       event_name = get_event_values(project$data, outlier),
       repeat_instrument = get_repeat_instrument_values(project$data, outlier),
@@ -1087,16 +1221,20 @@ get_future_date_findings <- function(project) {
 
 get_date_values <- function(value) {
   value <- as.character(value)
-  parsed <- vapply(value, \(x) {
-    if (get_is_missing(x)) {
-      return(NA_character_)
-    }
+  parsed <- vapply(
+    value,
+    \(x) {
+      if (get_is_missing(x)) {
+        return(NA_character_)
+      }
 
-    as.character(tryCatch(
-      suppressWarnings(as.Date(x)),
-      error = function(cnd) as.Date(NA)
-    ))
-  }, character(1))
+      as.character(tryCatch(
+        suppressWarnings(as.Date(x)),
+        error = function(cnd) as.Date(NA)
+      ))
+    },
+    character(1)
+  )
 
   as.Date(parsed)
 }
@@ -1151,7 +1289,10 @@ get_completion_status_value <- function(value) {
 }
 
 get_raw_completion_status <- function(project) {
-  completion_fields <- names(project$data)[str_detect(names(project$data), "_complete$")]
+  completion_fields <- names(project$data)[str_detect(
+    names(project$data),
+    "_complete$"
+  )]
   if (length(completion_fields) == 0) {
     return(get_empty_completion_status())
   }
@@ -1164,7 +1305,9 @@ get_raw_completion_status <- function(project) {
     }
 
     tibble(
-      record_id = as.character(project$data[[project$record_id_field]][form_rows]),
+      record_id = as.character(project$data[[project$record_id_field]][
+        form_rows
+      ]),
       form_name = form_name,
       event_name = get_event_values(project$data, form_rows),
       repeat_instrument = get_repeat_instrument_values(project$data, form_rows),
@@ -1190,7 +1333,11 @@ get_empty_completion_status <- function() {
 get_consistency_findings <- function(project) {
   checkbox_groups <- split(
     names(project$data)[str_detect(names(project$data), "___")],
-    sub("___.*$", "", names(project$data)[str_detect(names(project$data), "___")])
+    sub(
+      "___.*$",
+      "",
+      names(project$data)[str_detect(names(project$data), "___")]
+    )
   )
 
   if (length(checkbox_groups) == 0) {
@@ -1199,15 +1346,24 @@ get_consistency_findings <- function(project) {
 
   bind_rows(map(names(checkbox_groups), \(field) {
     columns <- checkbox_groups[[field]]
-    none_columns <- columns[str_detect(columns, "___(none|no|not_applicable|na)$")]
+    none_columns <- columns[str_detect(
+      columns,
+      "___(none|no|not_applicable|na)$"
+    )]
     other_columns <- setdiff(columns, none_columns)
 
     if (length(none_columns) == 0 || length(other_columns) == 0) {
       return(get_empty_findings())
     }
 
-    none_checked <- Reduce(`|`, lapply(project$data[none_columns], get_is_checked))
-    other_checked <- Reduce(`|`, lapply(project$data[other_columns], get_is_checked))
+    none_checked <- Reduce(
+      `|`,
+      lapply(project$data[none_columns], get_is_checked)
+    )
+    other_checked <- Reduce(
+      `|`,
+      lapply(project$data[other_columns], get_is_checked)
+    )
     contradiction <- none_checked & other_checked
 
     if (!any(contradiction, na.rm = TRUE)) {
@@ -1220,28 +1376,39 @@ get_consistency_findings <- function(project) {
       issue = "checkbox_none_with_other",
       severity = "warning",
       scope = "record_field",
-      record_id = as.character(project$data[[project$record_id_field]][contradiction]),
+      record_id = as.character(project$data[[project$record_id_field]][
+        contradiction
+      ]),
       form_name = metadata_row$form_name,
       event_name = get_event_values(project$data, contradiction),
-      repeat_instrument = get_repeat_instrument_values(project$data, contradiction),
+      repeat_instrument = get_repeat_instrument_values(
+        project$data,
+        contradiction
+      ),
       repeat_instance = get_repeat_instance_values(project$data, contradiction),
       field_name = field,
       value = paste(none_columns, collapse = ", "),
       expected = "None option not selected with other options",
-      message = paste("Checkbox field", field, "has a none option selected with another option.")
+      message = paste(
+        "Checkbox field",
+        field,
+        "has a none option selected with another option."
+      )
     )
   }))
 }
 
 get_project_summary <- function(project, findings, field_summary) {
   summary <- tibble(
-    source = project$source,
     record_count = n_distinct(project$data[[project$record_id_field]]),
     field_count = n_distinct(project$metadata$field_name),
     form_count = n_distinct(project$metadata$form_name),
     event_count = get_project_event_count(project),
     repeating_enabled = get_repeating_enabled(project),
-    missing_rate = get_weighted_missing_rate(field_summary$missing_count, field_summary$record_count),
+    missing_rate = get_weighted_missing_rate(
+      field_summary$missing_count,
+      field_summary$record_count
+    ),
     finding_count = nrow(findings)
   )
 
@@ -1257,7 +1424,14 @@ get_project_event_count <- function(project) {
 
   if (nrow(project$events) > 0) {
     event_columns <- intersect(
-      c("redcap_event_name", "unique_event_name", "redcap_event", "redcap_arm", "arm_num", "arm_name"),
+      c(
+        "redcap_event_name",
+        "unique_event_name",
+        "redcap_event",
+        "redcap_arm",
+        "arm_num",
+        "arm_name"
+      ),
       names(project$events)
     )
 
@@ -1278,7 +1452,10 @@ get_repeating_enabled <- function(project) {
 
   if (
     nrow(project$instrument_structure) > 0 &&
-      any(tolower(project$instrument_structure$structure) == "repeating", na.rm = TRUE)
+      any(
+        tolower(project$instrument_structure$structure) == "repeating",
+        na.rm = TRUE
+      )
   ) {
     return(TRUE)
   }
@@ -1301,7 +1478,10 @@ get_form_summary <- function(project, field_summary) {
     summarise(
       field_count = n(),
       required_field_count = sum(.data$required_field),
-      missing_rate = get_weighted_missing_rate(.data$missing_count, .data$record_count),
+      missing_rate = get_weighted_missing_rate(
+        .data$missing_count,
+        .data$record_count
+      ),
       .groups = "drop"
     )
 }
@@ -1341,7 +1521,13 @@ get_record_summary <- function(project, findings) {
 
   out |>
     left_join(finding_counts, by = "record_id") |>
-    mutate(finding_count = if_else(is.na(.data$finding_count), 0L, .data$finding_count))
+    mutate(
+      finding_count = if_else(
+        is.na(.data$finding_count),
+        0L,
+        .data$finding_count
+      )
+    )
 }
 
 get_event_summary <- function(project) {
@@ -1361,7 +1547,9 @@ get_form_metadata <- function(project) {
     summarise(
       field_count = n(),
       required_field_count = sum(.data$required_field),
-      choice_field_count = sum(.data$field_type %in% c("radio", "dropdown", "checkbox")),
+      choice_field_count = sum(
+        .data$field_type %in% c("radio", "dropdown", "checkbox")
+      ),
       .groups = "drop"
     )
 }
@@ -1371,7 +1559,10 @@ get_choice_metadata <- function(project) {
     filter(!get_is_missing(.data$select_choices_or_calculations))
 
   bind_rows(map(seq_len(nrow(metadata)), \(index) {
-    choices <- strsplit(metadata$select_choices_or_calculations[[index]], "\\|")[[1]]
+    choices <- strsplit(
+      metadata$select_choices_or_calculations[[index]],
+      "\\|"
+    )[[1]]
     bind_rows(map(choices, \(choice) {
       parts <- strsplit(choice, ",", fixed = TRUE)[[1]]
       tibble(
@@ -1497,9 +1688,11 @@ get_repeat_instance_values <- function(data, rows) {
   as.character(data$redcap_repeat_instance[rows])
 }
 
-get_branching_applicable_rows <- function(project,
-                                          logic,
-                                          branching_environment = NULL) {
+get_branching_applicable_rows <- function(
+  project,
+  logic,
+  branching_environment = NULL
+) {
   if (length(logic) == 0 || get_is_missing(logic)) {
     return(rep(TRUE, nrow(project$data)))
   }
@@ -1517,7 +1710,11 @@ get_branching_applicable_rows <- function(project,
   out
 }
 
-get_evaluated_branching_logic <- function(data, logic, branching_environment = NULL) {
+get_evaluated_branching_logic <- function(
+  data,
+  logic,
+  branching_environment = NULL
+) {
   expression <- get_branching_expression(data, logic)
   parsed <- parse(text = expression)
 
@@ -1542,7 +1739,12 @@ get_branching_expression <- function(data, logic) {
   expression <- gsub("(?i)\\band\\b", "&", expression, perl = TRUE)
   expression <- gsub("(?i)\\bor\\b", "|", expression, perl = TRUE)
   expression <- gsub("(?<![<>=!])=(?!=)", "==", expression, perl = TRUE)
-  expression <- gsub("\\[(\\w+)\\(([^)]+)\\)\\]", "`.\\1___\\2`", expression, perl = TRUE)
+  expression <- gsub(
+    "\\[(\\w+)\\(([^)]+)\\)\\]",
+    "`.\\1___\\2`",
+    expression,
+    perl = TRUE
+  )
   expression <- gsub("\\[([^]]+)\\]", "`.\\1`", expression, perl = TRUE)
 
   referenced_values <- gregexpr("`\\.([^`]+)`", expression, perl = TRUE)
@@ -1618,7 +1820,10 @@ get_branching_references <- function(logic) {
 get_empty_findings <- function() {
   tibble(
     finding_id = integer(),
-    !!!setNames(rep(list(character()), length(get_finding_columns())), get_finding_columns())
+    !!!setNames(
+      rep(list(character()), length(get_finding_columns())),
+      get_finding_columns()
+    )
   )
 }
 
