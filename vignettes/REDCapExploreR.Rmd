@@ -1,0 +1,160 @@
+---
+title: "Getting Started with REDCapExploreR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with REDCapExploreR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+```{r setup}
+library(REDCapExploreR)
+```
+
+REDCapExploreR provides exploratory tools for REDCap projects accessed through
+the REDCap API. The package focuses on project structure, record status
+summaries, codebook review, and general data quality checks that help data
+managers inspect REDCap data in R.
+
+## Installation
+
+Install the development version from GitHub:
+
+```{r install}
+devtools::install_github("CHOP-CGTInformatics/REDCapExploreR")
+```
+
+Load the package after installation:
+
+```{r load-package}
+library(REDCapExploreR)
+```
+
+## REDCap API credentials
+
+Most REDCapExploreR workflows need a REDCap API endpoint and an API token with
+access to the project being reviewed. A common setup is to store these values in
+environment variables and read them at the start of the analysis:
+
+```{r credentials}
+redcap_uri <- Sys.getenv("REDCAP_URI")
+token <- Sys.getenv("REDCAP_TOKEN")
+```
+
+The examples below assume `redcap_uri` and `token` have been set. Avoid storing
+API tokens directly in scripts, vignettes, or version-controlled files.
+
+## Record Status Dashboard
+
+Use `get_record_status_data()` to retrieve a plotting-friendly table that
+summarizes REDCap form completion status by record. Then pass the result to
+`plot_record_status()` to create a ggplot heat map similar to the REDCap Record
+Status Dashboard.
+
+```{r record-status}
+status_data <- get_record_status_data(
+  redcap_uri = redcap_uri,
+  token = token
+)
+
+plot_record_status(status_data)
+```
+
+For larger projects, compact mode reduces x-axis text size, truncates long form
+labels, and uses lighter tile borders.
+
+```{r record-status-compact}
+plot_record_status(status_data, mode = "compact")
+
+plot_record_status(
+  status_data,
+  mode = "compact",
+  form_label_max = 20
+)
+```
+
+Because `plot_record_status()` returns a ggplot object, you can add ggplot2
+layers to customize labels and display settings.
+
+```{r record-status-custom}
+plot_record_status(status_data) +
+  ggplot2::labs(title = "REDCap Record Status")
+```
+
+## Codebooks
+
+Use `build_codebook()` to pull REDCap project metadata and return a structured
+codebook with fields, choices, forms, events, event-instrument mappings,
+repeating instrument settings, and project-level summary metadata.
+
+```{r codebook}
+codebook <- build_codebook(
+  redcap_uri = redcap_uri,
+  token = token
+)
+
+codebook$fields
+codebook$choices
+codebook$forms
+```
+
+Use `view_codebook()` to review the codebook as an interactive HTML object with
+one table per available section.
+
+```{r view-codebook}
+viewer <- view_codebook(codebook)
+viewer
+
+htmltools::save_html(viewer, "codebook.html")
+```
+
+## Quality reports
+
+Use `build_quality_report()` to retrieve project records and metadata, run
+general data quality checks, and return findings, summaries, and interpreted
+metadata.
+
+```{r quality-report}
+report <- build_quality_report(
+  redcap_uri = redcap_uri,
+  token = token
+)
+
+report$findings
+report$summaries$project
+report$summaries$fields
+```
+
+The report can be limited to selected check groups when a focused review is
+needed.
+
+```{r quality-report-checks}
+report <- build_quality_report(
+  redcap_uri = redcap_uri,
+  token = token,
+  checks = c("missingness", "metadata")
+)
+```
+
+## Pulling project data
+
+`pull_redcap_project()` retrieves the raw REDCap records and project metadata
+used by the quality reporting workflow. This can be useful when you need the
+same normalized API pull for custom exploration.
+
+```{r pull-project}
+project <- pull_redcap_project(
+  redcap_uri = redcap_uri,
+  token = token
+)
+
+names(project)
+```

@@ -1,0 +1,52 @@
+url: https://chop-cgtinformatics.github.io/REDCapExploreR/
+
+home:
+  title: Exploratory Data Quality Tools for REDCap Projects
+
+template:
+  bootstrap: 5
+  bslib:
+    code_font: {google: "Fira Code"}
+    primary: "#b22228"
+    text-muted: "#FFFFFF"
+
+navbar:
+  bg: primary
+  structure:
+    left:  [intro, reference]
+    right: [search, github]
+  left:
+    - icon: fa-home
+      href: index.html
+      aria-label: Home
+    - text: Get Started
+      href: articles/REDCapExploreR.html
+    - text: Reference
+      href: reference/index.html
+
+search:
+  exclude: ['news/index.html', 'AGENTS.html']
+
+reference:
+- title: "Pull REDCap Data"
+  desc: >
+    Retrieve REDCap project data and metadata from the API.
+  contents:
+  - pull_redcap_project
+- title: "Build Codebooks"
+  desc: >
+    Build and view REDCap project codebooks.
+  contents:
+  - build_codebook
+  - view_codebook
+- title: "Build Quality Reports"
+  desc: >
+    Build exploratory REDCap data quality reports.
+  contents:
+  - build_quality_report
+- title: "Record Status Dashboard"
+  desc: >
+    Recreate and plot REDCap Record Status Dashboard data.
+  contents:
+  - get_record_status_data
+  - plot_record_status

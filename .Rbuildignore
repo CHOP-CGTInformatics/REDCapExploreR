@@ -5,6 +5,7 @@
 ^\.\.Rcheck$
 ^LICENSE\.md$
 ^README\.Rmd$
+^AGENTS\.md$
 ^\.github$
 ^_pkgdown\.yml$
 ^docs$
