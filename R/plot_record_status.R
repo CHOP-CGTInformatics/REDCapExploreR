@@ -46,6 +46,10 @@
 #' @returns A ggplot object.
 #'
 #' @examples
+#' plot_record_status(mock_record_status_data)
+#'
+#' plot_record_status(mock_record_status_data, mode = "compact")
+#'
 #' \dontrun{
 #' data <- get_record_status_data(
 #'   redcap_uri = Sys.getenv("REDCAP_URI"),

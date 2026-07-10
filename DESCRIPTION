@@ -9,7 +9,11 @@ Depends:
 Description: Provides tools to explore REDCap projects, summarize project
     structure, and flag common data quality issues for data managers.
 License: What license is it under?
+URL: https://chop-cgtinformatics.github.io/REDCapExploreR/,
+    https://github.com/CHOP-CGTInformatics/REDCapExploreR
+BugReports: https://github.com/CHOP-CGTInformatics/REDCapExploreR/issues
 Encoding: UTF-8
+LazyData: true
 Imports: 
     cli,
     DT,
@@ -25,7 +29,10 @@ Imports:
     tidyr,
     tidyselect
 Suggests: 
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
+VignetteBuilder: knitr

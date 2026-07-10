@@ -8,4 +8,13 @@
 \description{
 Provides tools to explore REDCap projects, summarize project structure, and flag common data quality issues for data managers.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://chop-cgtinformatics.github.io/REDCapExploreR/}
+  \item \url{https://github.com/CHOP-CGTInformatics/REDCapExploreR}
+  \item Report bugs at \url{https://github.com/CHOP-CGTInformatics/REDCapExploreR/issues}
+}
+
+}
 \keyword{internal}

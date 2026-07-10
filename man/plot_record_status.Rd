@@ -90,6 +90,10 @@ because event labels are already included in \code{form_name}.
 incomplete or unverified. Missing values are shown with \code{missing_color}.
 }
 \examples{
+plot_record_status(mock_record_status_data)
+
+plot_record_status(mock_record_status_data, mode = "compact")
+
 \dontrun{
 data <- get_record_status_data(
   redcap_uri = Sys.getenv("REDCAP_URI"),
