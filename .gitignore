@@ -12,3 +12,5 @@ inst/doc
 vignettes/*.html
 vignettes/*.pdf
 README.html
+
+/.quarto/
