@@ -2,13 +2,15 @@ Package: REDCapExploreR
 Type: Package
 Title: Exploratory Data Quality Tools for REDCap Projects
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
+Authors@R: c(
+    person("Richard", "Hanna", , "hannar1@chop.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0005-6496-8154"))
+  )
 Depends:
     R (>= 4.1.0)
 Description: Provides tools to explore REDCap projects, summarize project
     structure, and flag common data quality issues for data managers.
-License: What license is it under?
+License: MIT + file LICENSE
 URL: https://chop-cgtinformatics.github.io/REDCapExploreR/,
     https://github.com/CHOP-CGTInformatics/REDCapExploreR
 BugReports: https://github.com/CHOP-CGTInformatics/REDCapExploreR/issues
