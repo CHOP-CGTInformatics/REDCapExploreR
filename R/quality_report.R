@@ -112,6 +112,27 @@ build_quality_report <- function(
     redcap_uri = redcap_uri,
     token = token
   )
+
+  get_quality_report(
+    project = project,
+    checks = checks,
+    sparse_threshold = sparse_threshold,
+    outlier_iqr_multiplier = outlier_iqr_multiplier,
+    progress_bar = progress_bar,
+    progress_enabled = progress_enabled,
+    progress_force = progress_force
+  )
+}
+
+get_quality_report <- function(
+  project,
+  checks,
+  sparse_threshold,
+  outlier_iqr_multiplier,
+  progress_bar = NULL,
+  progress_enabled = FALSE,
+  progress_force = FALSE
+) {
   update_report_progress(
     progress_bar,
     progress_enabled,
@@ -360,11 +381,14 @@ close_report_progress <- function(progress_bar, enabled) {
 }
 
 get_quality_project <- function(redcap_uri, token) {
-  out <- get_api_project(pull_redcap_project(
+  get_quality_project_data(pull_redcap_project(
     redcap_uri = redcap_uri,
     token = token
   ))
+}
 
+get_quality_project_data <- function(project) {
+  out <- get_api_project(project)
   out$record_id_field <- get_record_id_field_report(out$data, out$metadata)
   out
 }

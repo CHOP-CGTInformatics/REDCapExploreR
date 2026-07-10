@@ -50,3 +50,11 @@ reference:
   contents:
   - get_record_status_data
   - plot_record_status
+- title: "Data"
+  desc: >
+    Synthetic REDCap-shaped datasets for examples and documentation.
+  contents:
+  - mock_redcap_project
+  - mock_record_status_data
+  - mock_codebook
+  - mock_quality_report

@@ -44,6 +44,10 @@ build_codebook <- function(redcap_uri, token) {
     )
   )
 
+  get_codebook(project)
+}
+
+get_codebook <- function(project) {
   codebook <- list(
     fields = get_codebook_fields(project),
     choices = get_codebook_choices(project),
@@ -260,8 +264,11 @@ get_codebook_fields <- function(project) {
       .data$event_count,
       .data$event_names,
       .data$repeating_status,
-      field_note = if ("field_note" %in% names(metadata))
-        as.character(.data$field_note) else NA_character_,
+      field_note = if ("field_note" %in% names(metadata)) {
+        as.character(.data$field_note)
+      } else {
+        NA_character_
+      },
       matrix_group_name = if ("matrix_group_name" %in% names(metadata)) {
         as.character(.data$matrix_group_name)
       } else {
@@ -591,10 +598,16 @@ get_codebook_validation_label <- function(
   map_chr(seq_along(validation_type), \(index) {
     pieces <- c(
       validation_type[[index]],
-      if (!get_is_missing(validation_min[[index]]))
-        paste("min", validation_min[[index]]) else NA_character_,
-      if (!get_is_missing(validation_max[[index]]))
-        paste("max", validation_max[[index]]) else NA_character_
+      if (!get_is_missing(validation_min[[index]])) {
+        paste("min", validation_min[[index]])
+      } else {
+        NA_character_
+      },
+      if (!get_is_missing(validation_max[[index]])) {
+        paste("max", validation_max[[index]])
+      } else {
+        NA_character_
+      }
     )
     pieces <- pieces[!get_is_missing(pieces)]
 
