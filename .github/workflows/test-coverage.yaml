@@ -12,7 +12,6 @@ jobs:
   test-coverage:
     runs-on: ubuntu-latest
     env:
-      NOT_CRAN: true
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Update Ubuntu, Install cURL Headers, add Libraries

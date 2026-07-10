@@ -343,9 +343,7 @@ get_codebook_forms <- function(project) {
 
 get_codebook_project_summary <- function(project) {
   project_info <- project$project_info
-  project_title <- if (
-    "project_title" %in% names(project_info) && nrow(project_info) > 0
-  ) {
+  project_title <- if ("project_title" %in% names(project_info) && nrow(project_info) > 0) {
     as.character(project_info$project_title[[1]])
   } else {
     "Unknown REDCap project"
@@ -620,9 +618,7 @@ get_codebook_validation_label <- function(
 }
 
 get_codebook_event_count <- function(project) {
-  if (
-    nrow(project$events) == 0 || !"redcap_event_name" %in% names(project$events)
-  ) {
+  if (nrow(project$events) == 0 || !"redcap_event_name" %in% names(project$events)) {
     return(NA_integer_)
   }
 

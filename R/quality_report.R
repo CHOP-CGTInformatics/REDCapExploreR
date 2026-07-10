@@ -157,8 +157,9 @@ get_quality_report <- function(
   )
 
   check_fns <- list(
-    missingness = \(...)
-      get_missingness_findings(project, field_summary, sparse_threshold),
+    missingness = \(...) {
+      get_missingness_findings(project, field_summary, sparse_threshold)
+    },
     metadata = \(...) get_metadata_findings(project),
     outliers = \(...) get_outlier_findings(project, outlier_iqr_multiplier),
     operational = \(...) get_operational_findings(project),

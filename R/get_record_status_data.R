@@ -272,8 +272,11 @@ get_dashboard_record_events <- function(project) {
   project$data |>
     transmute(
       record_id = as.character(.data[[project$record_id_field]]),
-      event_name = if (is.na(event_field)) NA_character_ else
+      event_name = if (is.na(event_field)) {
+        NA_character_
+      } else {
         as.character(.data[[event_field]])
+      }
     ) |>
     distinct(.data$record_id, .data$event_name)
 }
@@ -362,8 +365,11 @@ get_dashboard_event_labels <- function(project) {
   event_field <- get_event_field(project$data)
   data_events <- project$data |>
     transmute(
-      event_name = if (is.na(event_field)) NA_character_ else
+      event_name = if (is.na(event_field)) {
+        NA_character_
+      } else {
         as.character(.data[[event_field]])
+      }
     ) |>
     distinct(.data$event_name) |>
     mutate(event_order = row_number())
@@ -376,8 +382,11 @@ get_dashboard_event_labels <- function(project) {
     )
   }
 
-  event_label_column <- if ("event_name" %in% names(events)) "event_name" else
+  event_label_column <- if ("event_name" %in% names(events)) {
+    "event_name"
+  } else {
     "redcap_event_name"
+  }
   events$event_label <- as.character(events[[event_label_column]])
 
   events |>

@@ -3,9 +3,16 @@ devtools::load_all(".")
 mock_redcap_project <- list(
   data = tibble::tibble(
     record_id = c(
-      "C001", "C001", "C001",
-      "C002", "C002", "C002",
-      "C0003", "C0003", "C0003", "C0003"
+      "C001",
+      "C001",
+      "C001",
+      "C002",
+      "C002",
+      "C002",
+      "C0003",
+      "C0003",
+      "C0003",
+      "C0003"
     ),
     redcap_event_name = c(
       "baseline_arm_1",
