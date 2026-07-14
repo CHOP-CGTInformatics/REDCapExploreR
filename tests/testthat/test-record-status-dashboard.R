@@ -23,24 +23,24 @@ build_mock_status_dashboard <- function(
     }
   )
 
-  get_record_status_data(
+  build_record_status_data(
     redcap_uri = "https://redcap.example/api/",
     token = "test-token"
   )
 }
 
-test_that("get_record_status_data requires REDCap API credentials", {
+test_that("build_record_status_data requires REDCap API credentials", {
   expect_error(
-    get_record_status_data(),
+    build_record_status_data(),
     "redcap_uri"
   )
   expect_error(
-    get_record_status_data(redcap_uri = "", token = ""),
+    build_record_status_data(redcap_uri = "", token = ""),
     "redcap_uri"
   )
 })
 
-test_that("get_record_status_data returns classic dashboard tiles", {
+test_that("build_record_status_data returns classic dashboard tiles", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     demographic_value = c("present", "present"),
@@ -74,7 +74,7 @@ test_that("get_record_status_data returns classic dashboard tiles", {
   expect_equal(dashboard$pct_complete, c(1, NA, 1, 0))
 })
 
-test_that("get_record_status_data returns longitudinal event-form tiles", {
+test_that("build_record_status_data returns longitudinal event-form tiles", {
   redcap_data <- tibble::tibble(
     infseq_id = c("A", "A", "B", "B"),
     redcap_event_name = c(
@@ -138,7 +138,7 @@ test_that("get_record_status_data returns longitudinal event-form tiles", {
   )
 })
 
-test_that("get_record_status_data averages repeating instrument instances", {
+test_that("build_record_status_data averages repeating instrument instances", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1", "2"),
     redcap_repeat_instrument = c(NA, "repeat_form", "repeat_form", NA),
@@ -158,7 +158,8 @@ test_that("get_record_status_data averages repeating instrument instances", {
 
   dashboard <- build_mock_status_dashboard(
     data = redcap_data,
-    metadata = metadata
+    metadata = metadata,
+    repeating_instruments = tibble::tibble(form_name = "repeat_form")
   )
 
   expect_equal(
@@ -175,7 +176,7 @@ test_that("get_record_status_data averages repeating instrument instances", {
   )
 })
 
-test_that("get_record_status_data includes repeating-instrument-only events", {
+test_that("build_record_status_data includes repeating-instrument-only events", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_event_name = c(
@@ -217,7 +218,10 @@ test_that("get_record_status_data includes repeating-instrument-only events", {
   )
 
   repeating_instruments <- tibble::tibble(
-    event_name = c("repeating_event_arm_1", "nonrepeating_event_arm_1"),
+    unique_event_name = c(
+      "repeating_event_arm_1",
+      "nonrepeating_event_arm_1"
+    ),
     form_name = c(NA_character_, "repeat_form")
   )
 
@@ -399,13 +403,32 @@ test_that("plot_record_status truncates long compact form labels", {
 
   expect_equal(levels(standard_plot$data$form_name), long_label)
   expect_equal(
-    levels(compact_plot$data$form_name),
+    ggplot2::ggplot_build(compact_plot)$layout$panel_params[[1]]$x$get_labels(),
     stringr::str_trunc(long_label, width = 35)
   )
   expect_equal(
-    levels(override_plot$data$form_name),
+    ggplot2::ggplot_build(override_plot)$layout$panel_params[[1]]$x$get_labels(),
     stringr::str_trunc(long_label, width = 20)
   )
+  expect_equal(levels(compact_plot$data$form_name), long_label)
+})
+
+test_that("plot_record_status keeps truncated form labels distinct", {
+  labels <- c(
+    "A very long form label whose shared prefix is identical one",
+    "A very long form label whose shared prefix is identical two"
+  )
+  dashboard <- tibble::tibble(
+    record_id = "1",
+    form_name = labels,
+    pct_complete = c(1, 0)
+  )
+
+  plot <- plot_record_status(dashboard, mode = "compact", form_label_max = 35)
+  built_plot <- ggplot2::ggplot_build(plot)
+
+  expect_equal(nlevels(plot$data$form_name), 2)
+  expect_equal(built_plot$data[[1]]$x, c(1, 2))
 })
 
 test_that("plot_record_status compact mode preserves explicit overrides", {
@@ -485,5 +508,11 @@ test_that("plot_record_status validates dashboard data", {
       y_tick_every = 1.5
     ),
     "y_tick_every"
+  )
+  expect_error(
+    plot_record_status(
+      tibble::tibble(record_id = "1", form_name = "main", pct_complete = 1.1)
+    ),
+    "between 0 and 1"
   )
 })

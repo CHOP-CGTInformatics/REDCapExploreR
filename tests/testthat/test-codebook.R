@@ -129,8 +129,10 @@ test_that("build_codebook returns structured codebook tables", {
   )
   repeating <- tibble::tibble(
     event_name = "Follow-up",
-    instrument_name = "visit",
-    unique_event_name = "followup_arm_1"
+    arm_num = 1L,
+    unique_event_name = "followup_arm_1",
+    form_name = "visit",
+    custom_form_label = NA_character_
   )
   project_info <- tibble::tibble(
     project_id = 42,
@@ -164,6 +166,7 @@ test_that("build_codebook returns structured codebook tables", {
   )
   expect_equal(nrow(codebook$fields), 4)
   expect_equal(nrow(codebook$choices), 5)
+  expect_identical(codebook$repeating, repeating)
   expect_equal(codebook$project$project_title, "Example Codebook")
   expect_equal(codebook$project$project_id, 42)
   expect_equal(codebook$project$project_language, "English")
@@ -222,6 +225,92 @@ test_that("build_codebook parses choices and field display metadata", {
   )
 })
 
+test_that("build_codebook includes choice types and implicit binary choices", {
+  metadata <- tibble::tibble(
+    field_name = c(
+      "record_id",
+      "consented",
+      "eligible",
+      "priority",
+      "disposition",
+      "symptoms"
+    ),
+    form_name = "main",
+    field_type = c(
+      "text",
+      "yesno",
+      "truefalse",
+      "radio",
+      "dropdown",
+      "checkbox"
+    ),
+    field_label = c(
+      "Record ID",
+      "Consented",
+      "Eligible",
+      "Priority",
+      "Disposition",
+      "Symptoms"
+    ),
+    select_choices_or_calculations = c(
+      NA,
+      NA,
+      NA,
+      "1, Routine | 2, Urgent",
+      "1, Open | 2, Closed",
+      "fever, Fever | rash, Rash"
+    )
+  )
+
+  choices <- build_mock_codebook(metadata)$choices
+
+  expect_equal(
+    choices |>
+      dplyr::distinct(.data$field_name, .data$choice_type),
+    tibble::tibble(
+      field_name = c(
+        "consented",
+        "eligible",
+        "priority",
+        "disposition",
+        "symptoms"
+      ),
+      choice_type = c("yesno", "truefalse", "radio", "dropdown", "checkbox")
+    )
+  )
+
+  binary_choices <- choices |>
+    dplyr::filter(.data$choice_type %in% c("yesno", "truefalse")) |>
+    dplyr::select("field_name", "choice_value", "choice_label")
+
+  expect_equal(
+    binary_choices,
+    tibble::tibble(
+      field_name = c("consented", "consented", "eligible", "eligible"),
+      choice_value = c("1", "0", "1", "0"),
+      choice_label = c("Yes", "No", "True", "False")
+    )
+  )
+})
+
+test_that("build_codebook excludes calculations from choices", {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "bmi"),
+    form_name = "main",
+    field_type = c("text", "calc"),
+    field_label = c("Record ID", "BMI"),
+    select_choices_or_calculations = c(
+      NA,
+      "round([weight]/([height]^2), 1)"
+    )
+  )
+
+  codebook <- build_mock_codebook(metadata)
+
+  expect_equal(nrow(codebook$choices), 0)
+  expect_equal(codebook$fields$choice_count, c(0L, 0L))
+})
+
 test_that("build_codebook summarizes forms, events, and repeating structure", {
   metadata <- tibble::tibble(
     field_name = c("record_id", "baseline_value", "visit_value"),
@@ -276,6 +365,37 @@ test_that("build_codebook summarizes forms, events, and repeating structure", {
       dplyr::pull(.data$repeating_status),
     "Repeating instrument"
   )
+})
+
+test_that("build_codebook identifies forms in repeating events", {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "visit_date"),
+    form_name = "visit",
+    field_type = "text",
+    field_label = c("Record ID", "Visit Date")
+  )
+  events <- tibble::tibble(
+    event_name = "Visit",
+    unique_event_name = "visit_arm_1",
+    arm_num = 1L
+  )
+  event_instruments <- tibble::tibble(
+    unique_event_name = "visit_arm_1",
+    form = "visit"
+  )
+  repeating <- tibble::tibble(
+    unique_event_name = "visit_arm_1",
+    form_name = NA_character_
+  )
+
+  codebook <- build_mock_codebook(
+    metadata = metadata,
+    events = events,
+    event_instruments = event_instruments,
+    repeating_instruments = repeating
+  )
+
+  expect_equal(unique(codebook$fields$repeating_status), "Repeating event")
 })
 
 test_that("print.redcap_codebook reports concise project counts", {
@@ -370,16 +490,24 @@ test_that("view_codebook returns a browsable HTML object", {
   expect_false(grepl("Back to top", as.character(viewer), fixed = TRUE))
   expect_match(as.character(viewer), "status")
   expect_match(as.character(viewer), "Open")
-  viewer_head <- htmltools::renderTags(viewer)$head
-  expect_match(viewer_head, "HTMLWidgets.staticRender")
-  expect_match(viewer_head, "columns.adjust")
-  expect_match(viewer_head, "scrollIntoView")
-  expect_match(viewer_head, "position: sticky")
-  expect_match(viewer_head, "redcap-codebook-summary-item")
-  expect_match(viewer_head, "redcap-codebook-table thead th")
-  expect_match(viewer_head, "redcap-codebook-project-detail-table")
-  expect_match(viewer_head, "redcap-codebook-row-selected")
-  expect_false(grepl("window.location.hash =", viewer_head, fixed = TRUE))
+  dependencies <- htmltools::renderTags(viewer)$dependencies
+  dependency_names <- vapply(dependencies, `[[`, character(1), "name")
+  expect_true("redcap-codebook-viewer" %in% dependency_names)
+})
+
+test_that("codebook viewer assets match snapshots", {
+  asset_dir <- system.file("codebook-viewer", package = "REDCapExploreR")
+
+  expect_snapshot_file(
+    file.path(asset_dir, "codebook.css"),
+    name = "codebook.css",
+    cran = TRUE
+  )
+  expect_snapshot_file(
+    file.path(asset_dir, "codebook.js"),
+    name = "codebook.js",
+    cran = TRUE
+  )
 })
 
 test_that("view_codebook includes section descriptions", {

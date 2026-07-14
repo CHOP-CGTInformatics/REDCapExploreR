@@ -2,7 +2,7 @@
 #'
 #' @description
 #' `plot_record_status()` creates a ggplot heat map from data returned by
-#' [get_record_status_data()]. The plot is designed to resemble the REDCap
+#' [build_record_status_data()]. The plot is designed to resemble the REDCap
 #' Record Status Dashboard while remaining a standard ggplot object that users
 #' can extend with additional ggplot2 layers.
 #'
@@ -15,7 +15,7 @@
 #' `pct_complete` should range from `0` to `1`, where `1` is complete and `0` is
 #' incomplete or unverified. Missing values are shown with `missing_color`.
 #'
-#' @param data A dataframe returned by [get_record_status_data()].
+#' @param data A dataframe returned by [build_record_status_data()].
 #' @param record_id_field Optional string naming the record ID column. By
 #'   default, the function infers the only column other than `form_name`,
 #'   `event_name`, and `pct_complete`.
@@ -51,7 +51,7 @@
 #' plot_record_status(mock_record_status_data, mode = "compact")
 #'
 #' \dontrun{
-#' data <- get_record_status_data(
+#' data <- build_record_status_data(
 #'   redcap_uri = Sys.getenv("REDCAP_URI"),
 #'   token = Sys.getenv("REDCAP_TOKEN")
 #' )
@@ -97,7 +97,7 @@ plot_record_status <- function(
     show_y_title = show_y_title,
     form_label_max = form_label_max
   )
-  plot_data <- get_compact_form_labels(plot_data, settings$form_label_max)
+  x_labels <- get_record_status_labels(settings$form_label_max)
 
   x_text <- if (rotate_x_text) {
     element_text(
@@ -116,12 +116,21 @@ plot_record_status <- function(
   }
   y_title <- if (settings$show_y_title) element_text() else element_blank()
 
-  x_scale <- if (is.null(settings$x_breaks)) {
+  x_scale <- if (is.null(settings$x_breaks) && is.null(x_labels)) {
     scale_x_discrete(position = "top", drop = FALSE)
+  } else if (is.null(settings$x_breaks)) {
+    scale_x_discrete(position = "top", labels = x_labels, drop = FALSE)
+  } else if (is.null(x_labels)) {
+    scale_x_discrete(
+      position = "top",
+      breaks = settings$x_breaks,
+      drop = FALSE
+    )
   } else {
     scale_x_discrete(
       position = "top",
       breaks = settings$x_breaks,
+      labels = x_labels,
       drop = FALSE
     )
   }
@@ -230,22 +239,19 @@ get_record_status_breaks <- function(tick_every = NULL) {
   function(x) x[seq(1, length(x), by = tick_every)]
 }
 
-#' Truncate form label factor levels when requested
+#' Build a form label function
 #'
-#' @param data Plot data.
 #' @param form_label_max Maximum form label width.
 #'
-#' @returns Plot data with updated `form_name` factor labels.
+#' @returns A function that optionally truncates form labels.
 #'
 #' @noRd
-get_compact_form_labels <- function(data, form_label_max = NULL) {
+get_record_status_labels <- function(form_label_max = NULL) {
   if (is.null(form_label_max)) {
-    return(data)
+    return(NULL)
   }
 
-  labels <- levels(data$form_name)
-  levels(data$form_name) <- str_trunc(labels, width = form_label_max)
-  data
+  \(labels) as.vector(str_trunc(labels, form_label_max))
 }
 
 #' Validate a nullable positive integer argument
@@ -292,6 +298,13 @@ get_record_status_plot_data <- function(data, record_id_field = NULL) {
   missing_columns <- setdiff(required_columns, names(data))
   if (length(missing_columns) > 0) {
     cli_abort("{.arg data} must include {.field {missing_columns}}.")
+  }
+
+  if (
+    !is.numeric(data$pct_complete) ||
+      any(!is.na(data$pct_complete) & (data$pct_complete < 0 | data$pct_complete > 1))
+  ) {
+    cli_abort("{.field pct_complete} must contain numbers between 0 and 1.")
   }
 
   record_id_field <- get_record_status_id_field(data, record_id_field)

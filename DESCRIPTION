@@ -19,7 +19,7 @@ LazyData: true
 Imports: 
     cli,
     DT,
-    dplyr,
+    dplyr (>= 1.1.0),
     ggplot2,
     htmltools,
     purrr,
@@ -28,12 +28,12 @@ Imports:
     stats,
     stringr,
     tibble,
-    tidyr,
     tidyselect
 Suggests: 
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    tidyr
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

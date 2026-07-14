@@ -53,13 +53,13 @@ API tokens directly in scripts, vignettes, or version-controlled files.
 
 ## Record Status Dashboard
 
-Use `get_record_status_data()` to retrieve a plotting-friendly table that
+Use `build_record_status_data()` to retrieve a plotting-friendly table that
 summarizes REDCap form completion status by record. Then pass the result to
 `plot_record_status()` to create a ggplot heat map similar to the REDCap Record
 Status Dashboard.
 
 ```{r record-status-api, eval=FALSE}
-status_data <- get_record_status_data(
+status_data <- build_record_status_data(
   redcap_uri = redcap_uri,
   token = token
 )
@@ -70,7 +70,7 @@ plot_record_status(status_data)
 The package includes a small synthetic dataset for examples and offline
 exploration. `mock_record_status_data` is generated from `mock_redcap_project`
 using the same internal record-status logic that supports
-`get_record_status_data()`.
+`build_record_status_data()`.
 
 ```{r record-status-mock, fig.alt="Synthetic REDCap record status dashboard heat map."}
 mock_record_status_data
@@ -183,11 +183,15 @@ report <- build_quality_report(
 )
 ```
 
+See the [quality report article](quality-report.html) for a complete reference
+to report checks, output elements, interpretation workflows, and core
+assumptions.
+
 ## Pulling project data
 
-`pull_redcap_project()` retrieves the raw REDCap records and project metadata
+`pull_redcap_project()` retrieves the raw REDCap records and structural metadata
 used by the quality reporting workflow. This can be useful when you need the
-same normalized API pull for custom exploration.
+same API tables for custom exploration.
 
 ```{r pull-project-api, eval=FALSE}
 project <- pull_redcap_project(

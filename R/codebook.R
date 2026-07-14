@@ -12,7 +12,8 @@
 #' - `fields`: one row per REDCap field with display-oriented metadata,
 #'   parsed choice summaries, validation, branching logic, event applicability,
 #'   and repeating status when available.
-#' - `choices`: one row per parsed choice option.
+#' - `choices`: one row per parsed choice option, including its field choice
+#'   type.
 #' - `forms`: one row per instrument/form.
 #' - `events`: one row per REDCap event when the project is longitudinal.
 #' - `event_instruments`: one row per event/form mapping when available.
@@ -54,7 +55,8 @@ get_codebook <- function(project) {
     forms = get_codebook_forms(project),
     events = project$events,
     event_instruments = project$event_instruments,
-    repeating = project$repeating_instruments,
+    repeating = project$repeating_instruments |>
+      select(-any_of("redcap_event_name")),
     project = get_codebook_project_summary(project)
   )
 
@@ -136,27 +138,41 @@ pull_redcap_codebook <- function(redcap_uri, token) {
 
   list(
     metadata = get_redcapr_data(metadata_result, "metadata"),
-    events = get_optional_redcapr_data(redcap_event_read, redcap_uri, token),
+    events = get_optional_redcapr_data(
+      redcap_event_read,
+      redcap_uri,
+      token,
+      "event metadata"
+    ),
     event_instruments = get_optional_redcapr_data(
       redcap_event_instruments,
       redcap_uri,
-      token
+      token,
+      "event-instrument metadata"
     ),
     instruments = get_optional_redcapr_data(
       redcap_instruments,
       redcap_uri,
-      token
+      token,
+      "instrument metadata"
     ),
     repeating_instruments = get_optional_redcapr_data(
       redcap_instrument_repeating,
       redcap_uri,
-      token
+      token,
+      "repeating-instrument metadata"
     ),
-    arms = get_optional_redcapr_data(redcap_arm_export, redcap_uri, token),
+    arms = get_optional_redcapr_data(
+      redcap_arm_export,
+      redcap_uri,
+      token,
+      "arm metadata"
+    ),
     project_info = get_optional_redcapr_data(
       redcap_project_info_read,
       redcap_uri,
-      token
+      token,
+      "project metadata"
     )
   )
 }
@@ -192,7 +208,7 @@ get_codebook_project <- function(project) {
       project$event_instruments
     ),
     instruments = get_codebook_instruments(project$instruments),
-    repeating_instruments = get_codebook_repeating(
+    repeating_instruments = get_standard_repeating_instruments(
       project$repeating_instruments
     ),
     arms = get_codebook_arms(project$arms),
@@ -279,38 +295,9 @@ get_codebook_fields <- function(project) {
 
 get_codebook_choices <- function(project) {
   metadata <- project$metadata |>
-    mutate(field_order = row_number()) |>
-    filter(!get_is_missing(.data$select_choices_or_calculations))
+    mutate(field_order = row_number())
 
-  if (nrow(metadata) == 0) {
-    return(tibble(
-      field_order = integer(),
-      field_name = character(),
-      form_name = character(),
-      choice_order = integer(),
-      choice_value = character(),
-      choice_label = character()
-    ))
-  }
-
-  bind_rows(map(seq_len(nrow(metadata)), \(index) {
-    choices <- strsplit(
-      metadata$select_choices_or_calculations[[index]],
-      "\\|"
-    )[[1]]
-
-    bind_rows(map(seq_along(choices), \(choice_index) {
-      parts <- strsplit(choices[[choice_index]], ",", fixed = TRUE)[[1]]
-      tibble(
-        field_order = metadata$field_order[[index]],
-        field_name = metadata$field_name[[index]],
-        form_name = metadata$form_name[[index]],
-        choice_order = choice_index,
-        choice_value = str_trim(parts[[1]]),
-        choice_label = str_trim(paste(parts[-1], collapse = ","))
-      )
-    }))
-  }))
+  get_choice_rows(metadata)
 }
 
 get_codebook_forms <- function(project) {
@@ -487,33 +474,6 @@ get_codebook_instruments <- function(instruments) {
     distinct(.data$form_name, .keep_all = TRUE)
 }
 
-get_codebook_repeating <- function(repeating_instruments) {
-  repeating_instruments <- get_optional_api_table(repeating_instruments)
-  if (nrow(repeating_instruments) == 0 && ncol(repeating_instruments) == 0) {
-    return(tibble())
-  }
-
-  names(repeating_instruments) <- get_clean_names(names(repeating_instruments))
-
-  if (
-    !"form_name" %in% names(repeating_instruments) &&
-      "instrument_name" %in% names(repeating_instruments)
-  ) {
-    repeating_instruments <- repeating_instruments |>
-      mutate(form_name = as.character(.data$instrument_name))
-  }
-
-  if (
-    !"redcap_event_name" %in% names(repeating_instruments) &&
-      "unique_event_name" %in% names(repeating_instruments)
-  ) {
-    repeating_instruments <- repeating_instruments |>
-      mutate(redcap_event_name = as.character(.data$unique_event_name))
-  }
-
-  repeating_instruments
-}
-
 get_codebook_arms <- function(arms) {
   arms <- get_optional_api_table(arms)
   if (nrow(arms) == 0 && ncol(arms) == 0) {
@@ -574,14 +534,50 @@ get_codebook_event_summary <- function(project) {
 
 get_codebook_repeating_summary <- function(project) {
   repeating <- project$repeating_instruments
-  if (nrow(repeating) == 0 || !"form_name" %in% names(repeating)) {
+  if (nrow(repeating) == 0) {
     return(tibble(form_name = character(), repeating_status = character()))
   }
 
-  repeating |>
-    filter(!get_is_missing(.data$form_name)) |>
-    distinct(.data$form_name) |>
-    mutate(repeating_status = "Repeating instrument")
+  repeating_forms <- if ("form_name" %in% names(repeating)) {
+    repeating |>
+      filter(!get_is_missing(.data$form_name)) |>
+      transmute(
+        form_name = as.character(.data$form_name),
+        repeating_status = "Repeating instrument"
+      )
+  } else {
+    tibble(form_name = character(), repeating_status = character())
+  }
+
+  repeating_events <- if (
+    "redcap_event_name" %in% names(repeating) && all(c("redcap_event_name", "form_name") %in% names(project$event_instruments))
+  ) {
+    event_rows <- if ("form_name" %in% names(repeating)) {
+      repeating |> filter(get_is_missing(.data$form_name))
+    } else {
+      repeating
+    }
+    event_names <- event_rows |>
+      filter(!get_is_missing(.data$redcap_event_name)) |>
+      pull(.data$redcap_event_name)
+
+    project$event_instruments |>
+      filter(.data$redcap_event_name %in% event_names) |>
+      transmute(
+        form_name = as.character(.data$form_name),
+        repeating_status = "Repeating event"
+      )
+  } else {
+    tibble(form_name = character(), repeating_status = character())
+  }
+
+  bind_rows(repeating_forms, repeating_events) |>
+    distinct(.data$form_name, .data$repeating_status) |>
+    group_by(.data$form_name) |>
+    summarise(
+      repeating_status = paste(.data$repeating_status, collapse = "; "),
+      .groups = "drop"
+    )
 }
 
 get_codebook_validation_label <- function(
@@ -991,292 +987,11 @@ get_codebook_datatable <- function(data, page_length) {
 }
 
 get_codebook_viewer_deps <- function() {
-  tags$head(
-    tags$style(HTML(
-      "
-      .redcap-codebook-viewer {
-        background: #f6f8fa;
-        color: #24292f;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-          sans-serif;
-        line-height: 1.4;
-        margin: 0;
-        min-height: 100vh;
-        padding: 1.25rem;
-      }
-      .redcap-codebook-header {
-        background: #ffffff;
-        border: 1px solid #d0d7de;
-        border-radius: 6px;
-        margin-bottom: 1rem;
-        padding: 1rem 1.25rem;
-      }
-      .redcap-codebook-header h1 {
-        margin-bottom: 0.25rem;
-      }
-      .redcap-codebook-subtitle {
-        color: #57606a;
-        margin-top: 0;
-      }
-      .redcap-codebook-summary {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin: 1rem 0 0;
-      }
-      .redcap-codebook-summary-item {
-        background: #f6f8fa;
-        border: 1px solid #d8dee4;
-        border-radius: 6px;
-        min-width: 7rem;
-        padding: 0.5rem 0.75rem;
-      }
-      .redcap-codebook-summary-item dt {
-        color: #57606a;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-bottom: 0.15rem;
-        text-transform: uppercase;
-      }
-      .redcap-codebook-summary-item dd {
-        font-size: 1.2rem;
-        font-weight: 650;
-        margin: 0;
-      }
-      .redcap-codebook-nav {
-        background: #f6f8fa;
-        border-bottom: 1px solid #d8dee4;
-        margin: 0 -1.25rem 1rem;
-        padding: 0 1.25rem 0.75rem;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-      }
-      .redcap-codebook-nav ul {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        list-style: none;
-        padding-left: 0;
-        margin: 0;
-      }
-      .redcap-codebook-tab {
-        background: #ffffff;
-        align-items: center;
-        display: inline-block;
-        border: 1px solid #d0d7de;
-        border-radius: 6px;
-        color: #24292f;
-        cursor: pointer;
-        display: inline-flex;
-        gap: 0.4rem;
-        font: inherit;
-        font-size: 0.9rem;
-        padding: 0.4rem 0.65rem;
-      }
-      .redcap-codebook-tab.is-active {
-        background: #0969da;
-        border-color: #0969da;
-        color: #ffffff;
-      }
-      .redcap-codebook-tab-count {
-        background: #f6f8fa;
-        border-radius: 999px;
-        color: #57606a;
-        font-size: 0.75rem;
-        padding: 0.05rem 0.45rem;
-      }
-      .redcap-codebook-tab.is-active .redcap-codebook-tab-count {
-        background: rgba(255, 255, 255, 0.18);
-        color: #ffffff;
-      }
-      .redcap-codebook-section {
-        height: 0;
-        opacity: 0;
-        overflow: hidden;
-        pointer-events: none;
-        position: absolute;
-        visibility: hidden;
-        width: 100%;
-      }
-      .redcap-codebook-section.is-active {
-        height: auto;
-        opacity: 1;
-        overflow: visible;
-        pointer-events: auto;
-        position: static;
-        visibility: visible;
-      }
-      .redcap-codebook-section-header {
-        align-items: flex-start;
-        display: flex;
-        gap: 1rem;
-        justify-content: space-between;
-        margin-bottom: 0.75rem;
-      }
-      .redcap-codebook-section-header h2 {
-        margin: 0 0 0.3rem;
-      }
-      .redcap-codebook-section-count {
-        background: #eaeef2;
-        border-radius: 999px;
-        color: #57606a;
-        flex: 0 0 auto;
-        font-size: 0.8rem;
-        margin-top: 0.15rem;
-        padding: 0.15rem 0.55rem;
-      }
-      .redcap-codebook-description {
-        color: #57606a;
-        margin: 0;
-        max-width: 72rem;
-      }
-      .redcap-codebook-table-panel {
-        background: #ffffff;
-        border: 1px solid #d0d7de;
-        border-radius: 6px;
-        overflow-x: auto;
-        padding: 0.75rem;
-      }
-      .redcap-codebook-empty {
-        color: #57606a;
-        font-style: italic;
-        margin: 0;
-      }
-      .redcap-codebook-project-details {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-      }
-      .redcap-codebook-project-detail-group {
-        border: 1px solid #d8dee4;
-        border-radius: 6px;
-        overflow: hidden;
-      }
-      .redcap-codebook-project-detail-group h3 {
-        background: #f6f8fa;
-        border-bottom: 1px solid #d8dee4;
-        font-size: 0.95rem;
-        margin: 0;
-        padding: 0.5rem 0.75rem;
-      }
-      .redcap-codebook-project-detail-table {
-        border-collapse: collapse;
-        font-size: 0.88rem;
-        width: 100%;
-      }
-      .redcap-codebook-project-detail-table th,
-      .redcap-codebook-project-detail-table td {
-        border-bottom: 1px solid #eaeef2;
-        padding: 0.45rem 0.75rem;
-        text-align: left;
-        vertical-align: top;
-      }
-      .redcap-codebook-project-detail-table th {
-        color: #57606a;
-        font-weight: 600;
-        width: 42%;
-      }
-      .redcap-codebook-project-detail-table tr:last-child th,
-      .redcap-codebook-project-detail-table tr:last-child td {
-        border-bottom: 0;
-      }
-      .redcap-codebook-table {
-        font-size: 0.86rem;
-      }
-      .redcap-codebook-table thead th {
-        background: #f6f8fa;
-        border-bottom-color: #d0d7de;
-        color: #24292f;
-      }
-      .redcap-codebook-table tbody td {
-        vertical-align: top;
-      }
-      .redcap-codebook-table tbody tr {
-        cursor: pointer;
-      }
-      .redcap-codebook-table tbody tr.redcap-codebook-row-selected td {
-        background-color: #fff8c5 !important;
-      }
-      .redcap-codebook-table-panel .dataTables_wrapper {
-        color: #24292f;
-      }
-      .redcap-codebook-table-panel .dataTables_filter input,
-      .redcap-codebook-table-panel .dataTables_length select,
-      .redcap-codebook-table-panel thead input {
-        border: 1px solid #d0d7de;
-        border-radius: 4px;
-        padding: 0.2rem 0.35rem;
-      }
-      .redcap-codebook-table-panel .dataTables_info,
-      .redcap-codebook-table-panel .dataTables_paginate {
-        color: #57606a;
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-      }
-      "
-    )),
-    tags$script(HTML(
-      "
-      document.addEventListener('DOMContentLoaded', function() {
-        var tabs = document.querySelectorAll('.redcap-codebook-tab');
-        var sections = document.querySelectorAll('.redcap-codebook-section');
-
-        function showSection(sectionId) {
-          tabs.forEach(function(tab) {
-            var active = tab.getAttribute('data-section') === sectionId;
-            tab.classList.toggle('is-active', active);
-            tab.setAttribute('aria-selected', active ? 'true' : 'false');
-          });
-
-          sections.forEach(function(section) {
-            section.classList.toggle('is-active', section.id === sectionId);
-          });
-
-          if (window.HTMLWidgets && window.HTMLWidgets.staticRender) {
-            window.HTMLWidgets.staticRender();
-          }
-
-          if (window.jQuery && window.jQuery.fn.dataTable) {
-            window.jQuery('.dataTable').each(function() {
-              if (window.jQuery.fn.dataTable.isDataTable(this)) {
-                window.jQuery(this).DataTable().columns.adjust();
-              }
-            });
-          }
-        }
-
-        tabs.forEach(function(tab) {
-          tab.addEventListener('click', function(event) {
-            event.preventDefault();
-            showSection(tab.getAttribute('data-section'));
-            document.querySelector('.redcap-codebook-header')
-              .scrollIntoView({ behavior: 'auto', block: 'start' });
-          });
-        });
-
-        document.addEventListener('click', function(event) {
-          var row = event.target.closest('.redcap-codebook-table tbody tr');
-          if (!row) {
-            return;
-          }
-
-          var tbody = row.parentElement;
-          tbody.querySelectorAll('tr.redcap-codebook-row-selected')
-            .forEach(function(selectedRow) {
-              selectedRow.classList.remove('redcap-codebook-row-selected');
-            });
-          row.classList.add('redcap-codebook-row-selected');
-        });
-
-        if (window.location.hash) {
-          var sectionId = window.location.hash.replace('#', '');
-          if (document.getElementById(sectionId)) {
-            showSection(sectionId);
-          }
-        }
-      });
-      "
-    ))
+  htmlDependency(
+    name = "redcap-codebook-viewer",
+    version = "1.0.0",
+    src = c(file = system.file("codebook-viewer", package = "REDCapExploreR")),
+    stylesheet = "codebook.css",
+    script = "codebook.js"
   )
 }

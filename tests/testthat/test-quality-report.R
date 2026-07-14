@@ -50,6 +50,21 @@ test_that("build_quality_report requires REDCap API credentials", {
     build_quality_report(redcap_uri = "", token = "", progress = "none"),
     "redcap_uri"
   )
+  expect_error(
+    build_quality_report(redcap_uri = 1, token = 2, progress = "none"),
+    "redcap_uri"
+  )
+})
+
+test_that("build_quality_report validates scalar finite thresholds", {
+  expect_error(
+    build_quality_report(sparse_threshold = NA_real_, progress = "none"),
+    "sparse_threshold"
+  )
+  expect_error(
+    build_quality_report(outlier_iqr_multiplier = c(1, 2), progress = "none"),
+    "outlier_iqr_multiplier"
+  )
 })
 
 test_that("pull_redcap_project quiets REDCapR API messages", {
@@ -108,7 +123,7 @@ test_that("pull_redcap_project quiets REDCapR API messages", {
   )
 })
 
-test_that("pull_redcap_project tolerates optional API failures but not required failures", {
+test_that("pull_redcap_project reports optional and required API failures", {
   testthat::local_mocked_bindings(
     redcap_read_oneshot = function(redcap_uri, token, verbose, ...) {
       list(data = tibble::tibble(record_id = "1"))
@@ -137,16 +152,13 @@ test_that("pull_redcap_project tolerates optional API failures but not required 
     }
   )
 
-  project <- pull_redcap_project(
-    redcap_uri = "https://redcap.example/api/",
-    token = "test-token"
+  expect_error(
+    pull_redcap_project(
+      redcap_uri = "https://redcap.example/api/",
+      token = "test-token"
+    ),
+    "event metadata"
   )
-
-  expect_equal(nrow(project$data), 1)
-  expect_equal(project$events, tibble::tibble())
-  expect_equal(project$event_instruments, tibble::tibble())
-  expect_equal(project$instruments, tibble::tibble())
-  expect_equal(project$repeating_instruments, tibble::tibble())
 
   testthat::local_mocked_bindings(
     redcap_read_oneshot = function(...) {
@@ -161,6 +173,42 @@ test_that("pull_redcap_project tolerates optional API failures but not required 
     ),
     "required records failed"
   )
+})
+
+test_that("API repeating configuration does not depend on exported rows", {
+  redcap_data <- tibble::tibble(
+    record_id = character(),
+    repeat_value = character(),
+    repeat_form_complete = integer()
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "repeat_value"),
+    form_name = c("main", "repeat_form"),
+    field_type = "text",
+    field_label = c("Record ID", "Repeat Value"),
+    required_field = "n"
+  )
+  repeating_instruments <- tibble::tibble(
+    event_name = "Event 1",
+    arm_num = 1L,
+    unique_event_name = "event_1_arm_1",
+    form_name = "repeat_form",
+    custom_form_label = NA_character_
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    repeating_instruments = repeating_instruments,
+    checks = "missingness"
+  )
+
+  expect_true(report$summaries$project$repeating_enabled)
+  expect_equal(
+    report$metadata$repeating_instruments$redcap_event_name,
+    "event_1_arm_1"
+  )
+  expect_equal(nrow(report$findings), 0)
 })
 
 test_that("build_quality_report returns expected findings and summaries for API data", {
@@ -218,7 +266,6 @@ test_that("build_quality_report returns expected findings and summaries for API 
       "event_instruments",
       "instruments",
       "repeating_instruments",
-      "instrument_structure",
       "choices",
       "validation",
       "branching",
@@ -417,6 +464,7 @@ test_that("API field summaries ignore structural missingness from repeating inst
   report <- build_mock_quality_report(
     data = redcap_data,
     metadata = metadata,
+    repeating_instruments = tibble::tibble(form_name = "repeating_form"),
     checks = "missingness"
   )
 
@@ -428,7 +476,7 @@ test_that("API field summaries ignore structural missingness from repeating inst
       dplyr::pull(.data$missing_rate),
     c(0, 0)
   )
-  expect_equal(report$summaries$records$missing_field_count, c(0, 0, 0))
+  expect_equal(report$summaries$records$missing_field_count, 0)
 })
 
 test_that("API project and form missing rates are weighted missing fractions", {
@@ -483,6 +531,7 @@ test_that("API operational checks ignore structural completion blanks from repea
   report <- build_mock_quality_report(
     data = redcap_data,
     metadata = metadata,
+    repeating_instruments = tibble::tibble(form_name = "repeating_form"),
     checks = "operational"
   )
 
@@ -552,6 +601,30 @@ test_that("API checkbox consistency findings use REDCap checkbox columns", {
   expect_equal(report$findings$value, "symptoms___none")
 })
 
+test_that("API checkbox consistency uses metadata choice values", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2"),
+    symptoms___99 = c(1, 0),
+    symptoms___1 = c(1, 1)
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "symptoms"),
+    form_name = "main",
+    field_type = c("text", "checkbox"),
+    field_label = c("Record ID", "Symptoms"),
+    select_choices_or_calculations = c(NA, "99, None | 1, Fever")
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "consistency"
+  )
+
+  expect_equal(report$findings$record_id, "1")
+  expect_equal(report$findings$value, "symptoms___99")
+})
+
 test_that("API checkbox consistency findings include repeating instance context", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
@@ -576,6 +649,7 @@ test_that("API checkbox consistency findings include repeating instance context"
   report <- build_mock_quality_report(
     data = redcap_data,
     metadata = metadata,
+    repeating_instruments = tibble::tibble(form_name = "symptom_log"),
     checks = "consistency"
   )
 
@@ -982,6 +1056,9 @@ test_that("API field summaries ignore structural missingness between repeating i
   report <- build_mock_quality_report(
     data = redcap_data,
     metadata = metadata,
+    repeating_instruments = tibble::tibble(
+      form_name = c("repeat_a", "repeat_b")
+    ),
     checks = "missingness"
   )
 
@@ -994,7 +1071,7 @@ test_that("API field summaries ignore structural missingness between repeating i
       dplyr::pull(.data$record_count),
     c(1, 1)
   )
-  expect_equal(report$summaries$records$missing_field_count, c(0, 0, 0))
+  expect_equal(report$summaries$records$missing_field_count, 0)
 })
 
 test_that("API repeating missingness requires matching non-missing form status", {
@@ -1019,6 +1096,7 @@ test_that("API repeating missingness requires matching non-missing form status",
   report <- build_mock_quality_report(
     data = redcap_data,
     metadata = metadata,
+    repeating_instruments = tibble::tibble(form_name = "repeat_a"),
     checks = "missingness"
   )
 
@@ -1066,6 +1144,7 @@ test_that("API completion findings preserve form order around repeating forms", 
   report <- build_mock_quality_report(
     data = raw_data,
     metadata = metadata,
+    repeating_instruments = tibble::tibble(form_name = "repeated"),
     checks = "operational"
   )
 
@@ -1287,6 +1366,58 @@ test_that("API required missingness respects simple branching logic", {
     tibble::tibble(record_count = 2L, missing_count = 1L, missing_rate = 0.5)
   )
   expect_equal(report$summaries$records$missing_field_count, c(1, 0, 0))
+})
+
+test_that("API record summaries aggregate longitudinal rows", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "1", "2"),
+    redcap_event_name = c("baseline_arm_1", "followup_arm_1", "baseline_arm_1"),
+    required_value = c(NA, NA, "present"),
+    main_complete = 2
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "required_value"),
+    form_name = "main",
+    field_type = "text",
+    field_label = c("Record ID", "Required Value"),
+    required_field = "y"
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "missingness"
+  )
+
+  expect_equal(report$summaries$records$record_id, c("1", "2"))
+  expect_equal(report$summaries$records$missing_field_count, c(2, 0))
+  expect_equal(report$summaries$records$finding_count, c(2L, 0L))
+})
+
+test_that("API IQR checks exclude numeric-coded categorical fields", {
+  redcap_data <- tibble::tibble(
+    record_id = as.character(seq_len(6)),
+    category = c(1, 2, 2, 3, 3, 99),
+    main_complete = 2
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "category"),
+    form_name = "main",
+    field_type = c("text", "radio"),
+    field_label = c("Record ID", "Category"),
+    select_choices_or_calculations = c(
+      NA,
+      "1, A | 2, B | 3, C | 99, Other"
+    )
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "outliers"
+  )
+
+  expect_false("numeric_iqr_outlier" %in% report$findings$issue)
 })
 
 test_that("API required missingness treats NA branching evaluations as hidden", {

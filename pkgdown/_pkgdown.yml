@@ -13,7 +13,7 @@ template:
 navbar:
   bg: primary
   structure:
-    left:  [intro, reference]
+    left:  [intro, reference, articles]
     right: [search, github]
   left:
     - icon: fa-home
@@ -23,6 +23,11 @@ navbar:
       href: articles/REDCapExploreR.html
     - text: Reference
       href: reference/index.html
+    - text: Articles
+      menu:
+      - text: "Understanding Quality Report Outputs"
+        desc: "Navigate findings, summaries, metadata, and assumptions"
+        href: articles/quality-report.html
 
 search:
   exclude: ['news/index.html', 'AGENTS.html']
@@ -48,7 +53,7 @@ reference:
   desc: >
     Recreate and plot REDCap Record Status Dashboard data.
   contents:
-  - get_record_status_data
+  - build_record_status_data
   - plot_record_status
 - title: "Data"
   desc: >

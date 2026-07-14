@@ -1,7 +1,7 @@
-#' @title Get Record Status Dashboard data
+#' @title Build Record Status Dashboard data
 #'
 #' @description
-#' `get_record_status_data()` retrieves REDCap records and project structure
+#' `build_record_status_data()` retrieves REDCap records and project structure
 #' through the API, then returns a plotting-friendly tile table similar to the
 #' high-level REDCap Record Status Dashboard.
 #'
@@ -43,14 +43,14 @@
 #'
 #' @examples
 #' \dontrun{
-#' get_record_status_data(
+#' build_record_status_data(
 #'   redcap_uri = Sys.getenv("REDCAP_URI"),
 #'   token = Sys.getenv("REDCAP_TOKEN")
 #' )
 #' }
 #'
 #' @export
-get_record_status_data <- function(redcap_uri, token) {
+build_record_status_data <- function(redcap_uri, token) {
   if (missing(redcap_uri)) {
     cli_abort("{.arg redcap_uri} and {.arg token} are required.")
   }
@@ -135,7 +135,7 @@ get_dashboard_grid <- function(project) {
 
   if (all(is.na(record_events$event_name))) {
     return(
-      get_dashboard_cross_join(record_events, forms) |>
+      cross_join(record_events, forms) |>
         mutate(display_form_name = .data$form_label) |>
         select("record_id", "event_name", "form_name", "display_form_name")
     )
@@ -152,25 +152,6 @@ get_dashboard_grid <- function(project) {
       )
     ) |>
     select("record_id", "event_name", "form_name", "display_form_name")
-}
-
-#' Cross join two small dashboard metadata tables
-#'
-#' @param x A data frame.
-#' @param y A data frame.
-#'
-#' @returns A data frame containing every row combination from `x` and `y`.
-#'
-#' @noRd
-get_dashboard_cross_join <- function(x, y) {
-  x |>
-    mutate(.join_key = 1L) |>
-    left_join(
-      y |> mutate(.join_key = 1L),
-      by = ".join_key",
-      relationship = "many-to-many"
-    ) |>
-    select(-".join_key")
 }
 
 #' Empty dashboard grid
@@ -351,7 +332,7 @@ get_dashboard_event_form_pairs <- function(project, forms) {
     transmute(event_name = as.character(.data[[event_field]])) |>
     distinct(.data$event_name)
 
-  get_dashboard_cross_join(events, forms |> select("form_name"))
+  cross_join(events, forms |> select("form_name"))
 }
 
 #' Get event labels in observed event order
@@ -480,55 +461,15 @@ get_dashboard_status <- function(project) {
 #' @noRd
 get_dashboard_completion_rows <- function(project, form_name) {
   repeat_form <- get_is_repeating_form(project, form_name)
-  repeated_rows <- get_repeating_instrument_rows(project$data)
+  repeated_rows <- get_repeating_instrument_rows(project)
 
   rows <- if (repeat_form) {
-    get_matching_repeat_rows(project$data, form_name)
+    get_matching_repeat_rows(project, form_name)
   } else {
     !repeated_rows
   }
 
   rows & get_event_form_enabled_rows(project, form_name)
-}
-
-#' Determine whether a form is configured or observed as repeating
-#'
-#' @inheritParams get_dashboard_completion_rows
-#'
-#' @returns `TRUE` when `form_name` is a repeating instrument.
-#'
-#' @noRd
-get_is_repeating_form <- function(project, form_name) {
-  if (
-    "redcap_repeat_instrument" %in%
-      names(project$data) &&
-      any(
-        as.character(project$data$redcap_repeat_instrument) == form_name,
-        na.rm = TRUE
-      )
-  ) {
-    return(TRUE)
-  }
-
-  repeating_instruments <- get_optional_api_table(project$repeating_instruments)
-  if (nrow(repeating_instruments) == 0) {
-    return(FALSE)
-  }
-
-  names(repeating_instruments) <- get_clean_names(names(repeating_instruments))
-
-  form_columns <- intersect(
-    c("form_name", "instrument_name", "redcap_repeat_instrument"),
-    names(repeating_instruments)
-  )
-  if (length(form_columns) == 0) {
-    return(FALSE)
-  }
-
-  any(
-    as.character(repeating_instruments[[form_columns[[1]]]]) == form_name,
-    na.rm = TRUE
-  )
 }
 
 #' Convert completion status labels to a completion proportion
