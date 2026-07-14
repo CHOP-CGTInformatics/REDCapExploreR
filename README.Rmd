@@ -52,7 +52,10 @@ quality_report <- build_quality_report(redcap_uri, token)
 
 The package includes `mock_record_status_data`, `mock_codebook`, and
 `mock_quality_report` for offline exploration. See the getting-started vignette
-for output details, check definitions, and compact dashboard options.
+for an overview and the [quality report
+article](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html)
+for a comprehensive guide to quality report checks, output elements, and
+assumptions.
 
 ## Collaboration
 

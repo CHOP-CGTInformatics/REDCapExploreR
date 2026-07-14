@@ -183,6 +183,10 @@ report <- build_quality_report(
 )
 ```
 
+See the [quality report article](quality-report.html) for a complete reference
+to report checks, output elements, interpretation workflows, and core
+assumptions.
+
 ## Pulling project data
 
 `pull_redcap_project()` retrieves the raw REDCap records and structural metadata
