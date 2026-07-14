@@ -41,6 +41,12 @@
 <li class="active nav-item"><a class="nav-link" href="index.html" aria-label="Home"><span class="fa fa-home"></span></a></li>
 <li class="nav-item"><a class="nav-link" href="articles/REDCapExploreR.html">Get Started</a></li>
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="articles/quality-report.html">Understanding Quality Report Outputs</a></li>
+  </ul>
+</li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -70,6 +76,21 @@
 <p>You can install the development version of REDCapExploreR like so:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"CHOP-CGTInformatics/REDCapExploreR"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="core-workflows">Core workflows<a class="anchor" aria-label="anchor" href="#core-workflows"></a>
+</h2>
+<p>Store REDCap credentials outside your scripts, then pass them to the package’s build functions:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">redcap_uri</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_URI"</span><span class="op">)</span></span>
+<span><span class="va">token</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_TOKEN"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">status_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_record_status_data.html">build_record_status_data</a></span><span class="op">(</span><span class="va">redcap_uri</span>, <span class="va">token</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/plot_record_status.html">plot_record_status</a></span><span class="op">(</span><span class="va">status_data</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">codebook</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_codebook.html">build_codebook</a></span><span class="op">(</span><span class="va">redcap_uri</span>, <span class="va">token</span><span class="op">)</span></span>
+<span><span class="va">quality_report</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_quality_report.html">build_quality_report</a></span><span class="op">(</span><span class="va">redcap_uri</span>, <span class="va">token</span><span class="op">)</span></span></code></pre></div>
+<p>The package includes <code>mock_record_status_data</code>, <code>mock_codebook</code>, and <code>mock_quality_report</code> for offline exploration. See the getting-started vignette for an overview and the <a href="https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html">quality report article</a> for a comprehensive guide to quality report checks, output elements, and assumptions.</p>
 </div>
 <div class="section level2">
 <h2 id="collaboration">Collaboration<a class="anchor" aria-label="anchor" href="#collaboration"></a>

@@ -29,7 +29,8 @@ A `redcap_codebook` list with these elements:
   parsed choice summaries, validation, branching logic, event
   applicability, and repeating status when available.
 
-- `choices`: one row per parsed choice option.
+- `choices`: one row per parsed choice option, including its field
+  choice type.
 
 - `forms`: one row per instrument/form.
 

@@ -55,6 +55,8 @@ context when available from the REDCap export.
 the REDCap API. `summaries$project$field_count` is the count of distinct
 standardized metadata field names. `summaries$fields$missing_rate` is
 the field-level fraction missing among applicable rows.
+`summaries$records` contains one row per record; its missing-field count
+is summed across applicable event and repeat rows.
 `summaries$forms$missing_rate` and `summaries$project$missing_rate` are
 weighted fractions missing across applicable field-row cells.
 Applicability accounts for form availability, event-form mapping,
@@ -62,7 +64,9 @@ repeating instrument structure, and branching logic. Missingness is only
 assessed where the raw REDCap form status column `<form_name>_complete`
 is `1`/Unverified or `2`/Complete. Status `0`/Incomplete is handled by
 operational checks and does not contribute to missingness, even when
-REDCap exports checkbox choices as `0`.
+REDCap exports checkbox choices as `0`. Branching expressions that use
+unsupported REDCap functions or smart variables are treated as
+applicable so required values remain reviewable.
 
 ## Details
 

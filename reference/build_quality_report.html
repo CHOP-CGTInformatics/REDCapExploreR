@@ -22,6 +22,10 @@ interpreted metadata."><meta property="og:image" content="https://chop-cgtinform
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../index.html" aria-label="Home"><span class="fa fa-home"></span></a></li>
 <li class="nav-item"><a class="nav-link" href="../articles/REDCapExploreR.html">Get Started</a></li>
 <li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/quality-report.html">Understanding Quality Report Outputs</a></li>
+  </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/CHOP-CGTInformatics/REDCapExploreR/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
@@ -96,6 +100,8 @@ instance context when available from the REDCap export.
 by the REDCap API. <code>summaries$project$field_count</code> is the count of distinct
 standardized metadata field names. <code>summaries$fields$missing_rate</code> is the
 field-level fraction missing among applicable rows.
+<code>summaries$records</code> contains one row per record; its missing-field count is
+summed across applicable event and repeat rows.
 <code>summaries$forms$missing_rate</code> and <code>summaries$project$missing_rate</code> are
 weighted fractions missing across applicable field-row cells. Applicability
 accounts for form availability, event-form mapping, repeating instrument
@@ -103,7 +109,9 @@ structure, and branching logic. Missingness is only assessed where the raw
 REDCap form status column <code>&lt;form_name&gt;_complete</code> is <code>1</code>/Unverified or
 <code>2</code>/Complete. Status <code>0</code>/Incomplete is handled by operational checks and
 does not contribute to missingness, even when REDCap exports checkbox
-choices as <code>0</code>.</p>
+choices as <code>0</code>.
+Branching expressions that use unsupported REDCap functions or smart
+variables are treated as applicable so required values remain reviewable.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

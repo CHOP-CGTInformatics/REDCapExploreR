@@ -22,4 +22,6 @@ pull_redcap_project(redcap_uri, token)
 ## Value
 
 A list containing raw records, metadata, events, event-instrument
-mapping, instruments, and repeating instrument configuration.
+mapping, instruments, and repeating instrument configuration. Errors
+from any structural metadata endpoint are reported rather than converted
+into empty project structure.

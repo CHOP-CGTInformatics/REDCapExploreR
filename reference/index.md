@@ -27,8 +27,8 @@ Build exploratory REDCap data quality reports.
 
 Recreate and plot REDCap Record Status Dashboard data.
 
-- [`get_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/get_record_status_data.md)
-  : Get Record Status Dashboard data
+- [`build_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_record_status_data.md)
+  : Build Record Status Dashboard data
 - [`plot_record_status()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/plot_record_status.md)
   : Plot Record Status Dashboard data
 

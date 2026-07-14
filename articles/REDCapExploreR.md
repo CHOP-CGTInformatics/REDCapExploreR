@@ -46,7 +46,7 @@ files.
 ## Record Status Dashboard
 
 Use
-[`get_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/get_record_status_data.md)
+[`build_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_record_status_data.md)
 to retrieve a plotting-friendly table that summarizes REDCap form
 completion status by record. Then pass the result to
 [`plot_record_status()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/plot_record_status.md)
@@ -55,7 +55,7 @@ Dashboard.
 
 ``` r
 
-status_data <- get_record_status_data(
+status_data <- build_record_status_data(
   redcap_uri = redcap_uri,
   token = token
 )
@@ -67,7 +67,7 @@ The package includes a small synthetic dataset for examples and offline
 exploration. `mock_record_status_data` is generated from
 `mock_redcap_project` using the same internal record-status logic that
 supports
-[`get_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/get_record_status_data.md).
+[`build_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_record_status_data.md).
 
 ``` r
 
@@ -265,12 +265,17 @@ report <- build_quality_report(
 )
 ```
 
+See the [quality report
+article](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.md)
+for a complete reference to report checks, output elements,
+interpretation workflows, and core assumptions.
+
 ## Pulling project data
 
 [`pull_redcap_project()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/pull_redcap_project.md)
-retrieves the raw REDCap records and project metadata used by the
+retrieves the raw REDCap records and structural metadata used by the
 quality reporting workflow. This can be useful when you need the same
-normalized API pull for custom exploration.
+API tables for custom exploration.
 
 ``` r
 

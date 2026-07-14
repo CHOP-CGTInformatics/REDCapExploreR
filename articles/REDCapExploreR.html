@@ -38,6 +38,12 @@
 <li class="nav-item"><a class="nav-link" href="../index.html" aria-label="Home"><span class="fa fa-home"></span></a></li>
 <li class="active nav-item"><a class="nav-link" href="../articles/REDCapExploreR.html">Get Started</a></li>
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="../articles/quality-report.html">Understanding Quality Report Outputs</a></li>
+  </ul>
+</li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -98,13 +104,13 @@ scripts, vignettes, or version-controlled files.</p>
 <div class="section level2">
 <h2 id="record-status-dashboard">Record Status Dashboard<a class="anchor" aria-label="anchor" href="#record-status-dashboard"></a>
 </h2>
-<p>Use <code><a href="../reference/get_record_status_data.html">get_record_status_data()</a></code> to retrieve a
+<p>Use <code><a href="../reference/build_record_status_data.html">build_record_status_data()</a></code> to retrieve a
 plotting-friendly table that summarizes REDCap form completion status by
 record. Then pass the result to <code><a href="../reference/plot_record_status.html">plot_record_status()</a></code> to
 create a ggplot heat map similar to the REDCap Record Status
 Dashboard.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">status_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_record_status_data.html">get_record_status_data</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="va">status_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_record_status_data.html">build_record_status_data</a></span><span class="op">(</span></span>
 <span>  redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>,</span>
 <span>  token <span class="op">=</span> <span class="va">token</span></span>
 <span><span class="op">)</span></span>
@@ -114,7 +120,7 @@ Dashboard.</p>
 offline exploration. <code>mock_record_status_data</code> is generated
 from <code>mock_redcap_project</code> using the same internal
 record-status logic that supports
-<code><a href="../reference/get_record_status_data.html">get_record_status_data()</a></code>.</p>
+<code><a href="../reference/build_record_status_data.html">build_record_status_data()</a></code>.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_record_status_data</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 9 × 4</span></span></span>
@@ -271,14 +277,16 @@ review is needed.</p>
 <span>  token <span class="op">=</span> <span class="va">token</span>,</span>
 <span>  checks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"missingness"</span>, <span class="st">"metadata"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p>See the <a href="quality-report.html">quality report article</a> for
+a complete reference to report checks, output elements, interpretation
+workflows, and core assumptions.</p>
 </div>
 <div class="section level2">
 <h2 id="pulling-project-data">Pulling project data<a class="anchor" aria-label="anchor" href="#pulling-project-data"></a>
 </h2>
 <p><code><a href="../reference/pull_redcap_project.html">pull_redcap_project()</a></code> retrieves the raw REDCap records
-and project metadata used by the quality reporting workflow. This can be
-useful when you need the same normalized API pull for custom
-exploration.</p>
+and structural metadata used by the quality reporting workflow. This can
+be useful when you need the same API tables for custom exploration.</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">project</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/pull_redcap_project.html">pull_redcap_project</a></span><span class="op">(</span></span>
 <span>  redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>,</span>

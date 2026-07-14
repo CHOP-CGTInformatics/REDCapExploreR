@@ -1,13 +1,13 @@
-# Get Record Status Dashboard data
+# Build Record Status Dashboard data
 
-`get_record_status_data()` retrieves REDCap records and project
+`build_record_status_data()` retrieves REDCap records and project
 structure through the API, then returns a plotting-friendly tile table
 similar to the high-level REDCap Record Status Dashboard.
 
 ## Usage
 
 ``` r
-get_record_status_data(redcap_uri, token)
+build_record_status_data(redcap_uri, token)
 ```
 
 ## Arguments
@@ -61,7 +61,7 @@ instrument order. In longitudinal projects, `form_name` uses
 
 ``` r
 if (FALSE) { # \dontrun{
-get_record_status_data(
+build_record_status_data(
   redcap_uri = Sys.getenv("REDCAP_URI"),
   token = Sys.getenv("REDCAP_TOKEN")
 )

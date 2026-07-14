@@ -6,12 +6,13 @@
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/LICENSE.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/REDCapExploreR.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/index.html</loc></url>
+<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/authors.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/index.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/REDCapExploreR-package.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_codebook.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_quality_report.html</loc></url>
-<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/get_record_status_data.html</loc></url>
+<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_record_status_data.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/index.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/mock_codebook.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/mock_quality_report.html</loc></url>

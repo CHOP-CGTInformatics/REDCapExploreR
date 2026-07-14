@@ -15,6 +15,30 @@ You can install the development version of REDCapExploreR like so:
 devtools::install_github("CHOP-CGTInformatics/REDCapExploreR")
 ```
 
+## Core workflows
+
+Store REDCap credentials outside your scripts, then pass them to the
+package’s build functions:
+
+``` r
+
+redcap_uri <- Sys.getenv("REDCAP_URI")
+token <- Sys.getenv("REDCAP_TOKEN")
+
+status_data <- build_record_status_data(redcap_uri, token)
+plot_record_status(status_data)
+
+codebook <- build_codebook(redcap_uri, token)
+quality_report <- build_quality_report(redcap_uri, token)
+```
+
+The package includes `mock_record_status_data`, `mock_codebook`, and
+`mock_quality_report` for offline exploration. See the getting-started
+vignette for an overview and the [quality report
+article](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html)
+for a comprehensive guide to quality report checks, output elements, and
+assumptions.
+
 ## Collaboration
 
 We invite you to give feedback and collaborate with us! If you are
