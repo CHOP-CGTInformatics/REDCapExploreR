@@ -44,6 +44,8 @@
 #'   by the REDCap API. `summaries$project$field_count` is the count of distinct
 #'   standardized metadata field names. `summaries$fields$missing_rate` is the
 #'   field-level fraction missing among applicable rows.
+#'   `summaries$records` contains one row per record; its missing-field count is
+#'   summed across applicable event and repeat rows.
 #'   `summaries$forms$missing_rate` and `summaries$project$missing_rate` are
 #'   weighted fractions missing across applicable field-row cells. Applicability
 #'   accounts for form availability, event-form mapping, repeating instrument
@@ -52,6 +54,8 @@
 #'   `2`/Complete. Status `0`/Incomplete is handled by operational checks and
 #'   does not contribute to missingness, even when REDCap exports checkbox
 #'   choices as `0`.
+#'   Branching expressions that use unsupported REDCap functions or smart
+#'   variables are treated as applicable so required values remain reviewable.
 #'
 #' @examples
 #' \dontrun{
@@ -140,7 +144,7 @@ get_quality_report <- function(
     "Normalized input"
   )
 
-  project <- get_project_field_applicability(project)
+  project$field_applicability <- get_field_applicability(project)
   update_report_progress(
     progress_bar,
     progress_enabled,
@@ -213,7 +217,6 @@ get_quality_report <- function(
     event_instruments = project$event_instruments,
     instruments = project$instruments,
     repeating_instruments = project$repeating_instruments,
-    instrument_structure = project$instrument_structure,
     choices = get_choice_metadata(project),
     validation = get_validation_metadata(project),
     branching = get_branching_metadata(project),
@@ -247,6 +250,8 @@ get_quality_report <- function(
 #'
 #' @returns A list containing raw records, metadata, events, event-instrument
 #'   mapping, instruments, and repeating instrument configuration.
+#'   Errors from any structural metadata endpoint are reported rather than
+#'   converted into empty project structure.
 #'
 #' @export
 pull_redcap_project <- function(redcap_uri, token) {
@@ -266,21 +271,29 @@ pull_redcap_project <- function(redcap_uri, token) {
   list(
     data = get_redcapr_data(data_result, "records"),
     metadata = get_redcapr_data(metadata_result, "metadata"),
-    events = get_optional_redcapr_data(redcap_event_read, redcap_uri, token),
+    events = get_optional_redcapr_data(
+      redcap_event_read,
+      redcap_uri,
+      token,
+      "event metadata"
+    ),
     event_instruments = get_optional_redcapr_data(
       redcap_event_instruments,
       redcap_uri,
-      token
+      token,
+      "event-instrument metadata"
     ),
     instruments = get_optional_redcapr_data(
       redcap_instruments,
       redcap_uri,
-      token
+      token,
+      "instrument metadata"
     ),
     repeating_instruments = get_optional_redcapr_data(
       redcap_instrument_repeating,
       redcap_uri,
-      token
+      token,
+      "repeating-instrument metadata"
     )
   )
 }
@@ -315,6 +328,8 @@ get_report_progress_steps <- function(checks) {
 get_validate_api_credentials <- function(redcap_uri, token) {
   invalid_credentials <- missing(redcap_uri) ||
     missing(token) ||
+    !is.character(redcap_uri) ||
+    !is.character(token) ||
     length(redcap_uri) != 1 ||
     length(token) != 1 ||
     is.na(redcap_uri) ||
@@ -413,10 +428,9 @@ get_api_project <- function(project) {
       project$event_instruments
     ),
     instruments = get_optional_api_table(project$instruments),
-    repeating_instruments = get_optional_api_table(
+    repeating_instruments = get_standard_repeating_instruments(
       project$repeating_instruments
     ),
-    instrument_structure = tibble(),
     source = "api"
   )
 
@@ -625,6 +639,9 @@ get_validate_project <- function(project) {
 get_validate_thresholds <- function(sparse_threshold, outlier_iqr_multiplier) {
   if (
     !is.numeric(sparse_threshold) ||
+      length(sparse_threshold) != 1 ||
+      is.na(sparse_threshold) ||
+      !is.finite(sparse_threshold) ||
       sparse_threshold <= 0 ||
       sparse_threshold > 1
   ) {
@@ -633,7 +650,13 @@ get_validate_thresholds <- function(sparse_threshold, outlier_iqr_multiplier) {
     )
   }
 
-  if (!is.numeric(outlier_iqr_multiplier) || outlier_iqr_multiplier <= 0) {
+  if (
+    !is.numeric(outlier_iqr_multiplier) ||
+      length(outlier_iqr_multiplier) != 1 ||
+      is.na(outlier_iqr_multiplier) ||
+      !is.finite(outlier_iqr_multiplier) ||
+      outlier_iqr_multiplier <= 0
+  ) {
     cli_abort("{.arg outlier_iqr_multiplier} must be greater than 0.")
   }
 }
@@ -692,10 +715,6 @@ get_field_summary <- function(project) {
   }))
 }
 
-get_field_rows <- function(project, form_name) {
-  get_form_applicable_rows(project, form_name)
-}
-
 get_field_applicable_rows <- function(project, field) {
   if (
     "field_applicability" %in%
@@ -727,7 +746,7 @@ get_field_applicability <- function(project) {
     }),
     unique(field_metadata$form_name)
   )
-  branching_rows <- new.env(parent = emptyenv())
+  branching_rows <- new.env(parent = emptyenv()) # nolint: object_usage_linter.
 
   setNames(
     map(fields, \(field) {
@@ -750,11 +769,6 @@ get_field_applicability <- function(project) {
     }),
     fields
   )
-}
-
-get_project_field_applicability <- function(project) {
-  project$field_applicability <- get_field_applicability(project)
-  project
 }
 
 get_represented_fields <- function(project) {
@@ -793,8 +807,8 @@ get_field_values <- function(project, field) {
 }
 
 get_form_applicable_rows <- function(project, form_name) {
-  repeated_rows <- get_repeating_instrument_rows(project$data)
-  matching_repeat_rows <- get_matching_repeat_rows(project$data, form_name)
+  repeated_rows <- get_repeating_instrument_rows(project)
+  matching_repeat_rows <- get_matching_repeat_rows(project, form_name)
   nonrepeat_rows <- !repeated_rows
 
   matching_repeat_rows |
@@ -804,8 +818,8 @@ get_form_applicable_rows <- function(project, form_name) {
 }
 
 get_missingness_form_applicable_rows <- function(project, form_name) {
-  repeated_rows <- get_repeating_instrument_rows(project$data)
-  matching_repeat_rows <- get_matching_repeat_rows(project$data, form_name)
+  repeated_rows <- get_repeating_instrument_rows(project)
+  matching_repeat_rows <- get_matching_repeat_rows(project, form_name)
   nonrepeat_rows <- !repeated_rows
 
   (matching_repeat_rows |
@@ -822,23 +836,6 @@ get_form_completion_assessed_rows <- function(data, form_name) {
 
   get_completion_status_value(data[[completion_field]]) %in%
     c("Unverified", "Complete")
-}
-
-get_repeating_instrument_rows <- function(data) {
-  if (!"redcap_repeat_instrument" %in% names(data)) {
-    return(rep(FALSE, nrow(data)))
-  }
-
-  !get_is_missing(data$redcap_repeat_instrument)
-}
-
-get_matching_repeat_rows <- function(data, form_name) {
-  if (!"redcap_repeat_instrument" %in% names(data)) {
-    return(rep(FALSE, nrow(data)))
-  }
-
-  !get_is_missing(data$redcap_repeat_instrument) &
-    as.character(data$redcap_repeat_instrument) == as.character(form_name)
 }
 
 get_event_form_enabled_rows <- function(project, form_name) {
@@ -1080,7 +1077,11 @@ get_branching_orphans <- function(metadata) {
 }
 
 get_high_risk_text_findings <- function(metadata) {
-  pattern <- "note|comment|other|describe|free.?text|detail"
+  pattern <- paste0(
+    "(?:^|[^a-z])",
+    "(?:notes?|comments?|other|describe|free.?text|details?)",
+    "(?:[^a-z]|$)"
+  )
   risky <- metadata |>
     filter(
       .data$field_type %in% c("text", "notes"),
@@ -1108,10 +1109,12 @@ get_high_risk_text_findings <- function(metadata) {
 }
 
 get_outlier_findings <- function(project, outlier_iqr_multiplier) {
+  today <- Sys.Date()
+
   bind_rows(
     get_range_findings(project),
     get_iqr_outlier_findings(project, outlier_iqr_multiplier),
-    get_future_date_findings(project)
+    get_future_date_findings(project, today)
   )
 }
 
@@ -1207,7 +1210,7 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
   }))
 }
 
-get_future_date_findings <- function(project) {
+get_future_date_findings <- function(project, today = Sys.Date()) {
   date_fields <- project$metadata |>
     filter(
       .data$field_name %in% names(project$data),
@@ -1219,8 +1222,11 @@ get_future_date_findings <- function(project) {
 
   bind_rows(map(seq_len(nrow(date_fields)), \(index) {
     field <- date_fields$field_name[[index]]
-    value <- get_date_values(project$data[[field]])
-    future <- !is.na(value) & value > Sys.Date()
+    value <- as.Date(
+      as.character(project$data[[field]]),
+      format = "%Y-%m-%d"
+    )
+    future <- !is.na(value) & value > today
 
     if (!any(future)) {
       return(get_empty_findings())
@@ -1238,30 +1244,10 @@ get_future_date_findings <- function(project) {
       repeat_instance = get_repeat_instance_values(project$data, future),
       field_name = field,
       value = as.character(project$data[[field]][future]),
-      expected = paste("On or before", Sys.Date()),
+      expected = "On or before today",
       message = paste("Date field", field, "contains a future date.")
     )
   }))
-}
-
-get_date_values <- function(value) {
-  value <- as.character(value)
-  parsed <- vapply(
-    value,
-    \(x) {
-      if (get_is_missing(x)) {
-        return(NA_character_)
-      }
-
-      as.character(tryCatch(
-        suppressWarnings(as.Date(x)),
-        error = function(cnd) as.Date(NA)
-      ))
-    },
-    character(1)
-  )
-
-  as.Date(parsed)
 }
 
 get_operational_findings <- function(project) {
@@ -1302,7 +1288,7 @@ get_completion_status <- function(project) {
 
 get_completion_status_value <- function(value) {
   value <- as.character(value)
-  value_lower <- tolower(value)
+  value_lower <- tolower(value) # nolint: object_usage_linter.
 
   case_when(
     get_is_missing(value) ~ NA_character_,
@@ -1324,7 +1310,7 @@ get_raw_completion_status <- function(project) {
 
   bind_rows(map(completion_fields, \(field) {
     form_name <- sub("_complete$", "", field)
-    form_rows <- get_field_rows(project, form_name)
+    form_rows <- get_form_applicable_rows(project, form_name)
     if (!any(form_rows)) {
       return(get_empty_completion_status())
     }
@@ -1356,6 +1342,7 @@ get_empty_completion_status <- function() {
 }
 
 get_consistency_findings <- function(project) {
+  choices <- get_choice_rows(project$metadata)
   checkbox_groups <- split(
     names(project$data)[str_detect(names(project$data), "___")],
     sub(
@@ -1371,10 +1358,7 @@ get_consistency_findings <- function(project) {
 
   bind_rows(map(names(checkbox_groups), \(field) {
     columns <- checkbox_groups[[field]]
-    none_columns <- columns[str_detect(
-      columns,
-      "___(none|no|not_applicable|na)$"
-    )]
+    none_columns <- get_none_choice_columns(choices, field, columns)
     other_columns <- setdiff(columns, none_columns)
 
     if (length(none_columns) == 0 || length(other_columns) == 0) {
@@ -1421,6 +1405,24 @@ get_consistency_findings <- function(project) {
       )
     )
   }))
+}
+
+get_none_choice_columns <- function(choices, field, columns) {
+  none_labels <- c("none", "no", "not applicable", "n/a", "na", "none of the above")
+  none_values <- choices |>
+    filter(
+      .data$field_name == .env$field,
+      str_squish(tolower(.data$choice_label)) %in% none_labels
+    ) |>
+    pull(.data$choice_value)
+
+  metadata_columns <- paste0(field, "___", none_values)
+  legacy_columns <- columns[str_detect(
+    columns,
+    "___(none|no|not_applicable|na)$"
+  )]
+
+  intersect(columns, unique(c(metadata_columns, legacy_columns)))
 }
 
 get_project_summary <- function(project, findings, field_summary) {
@@ -1471,21 +1473,7 @@ get_project_event_count <- function(project) {
 }
 
 get_repeating_enabled <- function(project) {
-  if (nrow(project$repeating_instruments) > 0) {
-    return(TRUE)
-  }
-
-  if (
-    nrow(project$instrument_structure) > 0 &&
-      any(
-        tolower(project$instrument_structure$structure) == "repeating",
-        na.rm = TRUE
-      )
-  ) {
-    return(TRUE)
-  }
-
-  "redcap_repeat_instance" %in% names(project$data)
+  nrow(project$repeating_instruments) > 0
 }
 
 get_form_summary <- function(project, field_summary) {
@@ -1538,7 +1526,11 @@ get_record_summary <- function(project, findings) {
   out <- tibble(
     record_id = as.character(project$data[[project$record_id_field]]),
     missing_field_count = rowSums(missing_matrix)
-  )
+  ) |>
+    summarise(
+      missing_field_count = sum(.data$missing_field_count),
+      .by = "record_id"
+    )
 
   finding_counts <- findings |>
     filter(!get_is_missing(.data$record_id)) |>
@@ -1573,31 +1565,16 @@ get_form_metadata <- function(project) {
       field_count = n(),
       required_field_count = sum(.data$required_field),
       choice_field_count = sum(
-        .data$field_type %in% c("radio", "dropdown", "checkbox")
+        .data$field_type %in%
+          c("radio", "dropdown", "checkbox", "yesno", "truefalse")
       ),
       .groups = "drop"
     )
 }
 
 get_choice_metadata <- function(project) {
-  metadata <- project$metadata |>
-    filter(!get_is_missing(.data$select_choices_or_calculations))
-
-  bind_rows(map(seq_len(nrow(metadata)), \(index) {
-    choices <- strsplit(
-      metadata$select_choices_or_calculations[[index]],
-      "\\|"
-    )[[1]]
-    bind_rows(map(choices, \(choice) {
-      parts <- strsplit(choice, ",", fixed = TRUE)[[1]]
-      tibble(
-        field_name = metadata$field_name[[index]],
-        form_name = metadata$form_name[[index]],
-        choice_value = str_trim(parts[[1]]),
-        choice_label = str_trim(paste(parts[-1], collapse = ","))
-      )
-    }))
-  }))
+  get_choice_rows(project$metadata) |>
+    select("field_name", "form_name", "choice_value", "choice_label")
 }
 
 get_validation_metadata <- function(project) {
@@ -1641,13 +1618,15 @@ get_redcapr_data <- function(result, label) {
   cli_abort("Could not parse REDCapR {label} response.")
 }
 
-get_optional_redcapr_data <- function(fun, redcap_uri, token) {
+get_optional_redcapr_data <- function(fun, redcap_uri, token, label) {
   tryCatch(
     get_redcapr_data(
       fun(redcap_uri = redcap_uri, token = token, verbose = FALSE),
       "optional metadata"
     ),
-    error = function(cnd) tibble()
+    error = function(cnd) {
+      cli_abort("Could not retrieve REDCap {label}.", parent = cnd)
+    }
   )
 }
 
@@ -1722,6 +1701,8 @@ get_branching_applicable_rows <- function(
     return(rep(TRUE, nrow(project$data)))
   }
 
+  # REDCap functions and smart variables exceed this parser's supported subset.
+  # Fail open so unsupported logic does not hide potentially required values.
   out <- tryCatch(
     get_evaluated_branching_logic(project$data, logic, branching_environment),
     error = function(cnd) rep(TRUE, nrow(project$data))
@@ -1820,6 +1801,11 @@ get_is_numeric_field <- function(project, field) {
   value <- project$data[[field]]
   metadata_row <- get_metadata_row(project, field)
   validation <- tolower(metadata_row$text_validation_type_or_show_slider_number)
+  field_type <- tolower(metadata_row$field_type)
+
+  if (field_type %in% c("checkbox", "dropdown", "radio", "truefalse", "yesno")) {
+    return(FALSE)
+  }
 
   is.numeric(value) ||
     validation %in% c("integer", "number", "float", "number_1dp", "number_2dp")

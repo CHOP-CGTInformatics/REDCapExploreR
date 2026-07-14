@@ -6,6 +6,8 @@
 \alias{REDCapExploreR-package}
 \title{REDCapExploreR: Exploratory Data Quality Tools for REDCap Projects}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Provides tools to explore REDCap projects, summarize project structure, and flag common data quality issues for data managers.
 }
 \seealso{
@@ -15,6 +17,10 @@ Useful links:
   \item \url{https://github.com/CHOP-CGTInformatics/REDCapExploreR}
   \item Report bugs at \url{https://github.com/CHOP-CGTInformatics/REDCapExploreR/issues}
 }
+
+}
+\author{
+\strong{Maintainer}: Richard Hanna \email{hannar1@chop.edu} (\href{https://orcid.org/0009-0005-6496-8154}{ORCID})
 
 }
 \keyword{internal}

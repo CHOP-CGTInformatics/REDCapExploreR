@@ -6,6 +6,3 @@ line-ending = "auto"
 persistent-line-breaks = true
 exclude = []
 default-exclude = true
-skip = []
-table = []
-default-table = true

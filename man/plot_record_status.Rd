@@ -27,7 +27,7 @@ plot_record_status(
 )
 }
 \arguments{
-\item{data}{A dataframe returned by \code{\link[=get_record_status_data]{get_record_status_data()}}.}
+\item{data}{A dataframe returned by \code{\link[=build_record_status_data]{build_record_status_data()}}.}
 
 \item{record_id_field}{Optional string naming the record ID column. By
 default, the function infers the only column other than \code{form_name},
@@ -76,7 +76,7 @@ A ggplot object.
 }
 \description{
 \code{plot_record_status()} creates a ggplot heat map from data returned by
-\code{\link[=get_record_status_data]{get_record_status_data()}}. The plot is designed to resemble the REDCap
+\code{\link[=build_record_status_data]{build_record_status_data()}}. The plot is designed to resemble the REDCap
 Record Status Dashboard while remaining a standard ggplot object that users
 can extend with additional ggplot2 layers.
 }
@@ -95,7 +95,7 @@ plot_record_status(mock_record_status_data)
 plot_record_status(mock_record_status_data, mode = "compact")
 
 \dontrun{
-data <- get_record_status_data(
+data <- build_record_status_data(
   redcap_uri = Sys.getenv("REDCAP_URI"),
   token = Sys.getenv("REDCAP_TOKEN")
 )

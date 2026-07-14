@@ -17,7 +17,8 @@ A \code{redcap_codebook} list with these elements:
 \item \code{fields}: one row per REDCap field with display-oriented metadata,
 parsed choice summaries, validation, branching logic, event applicability,
 and repeating status when available.
-\item \code{choices}: one row per parsed choice option.
+\item \code{choices}: one row per parsed choice option, including its field choice
+type.
 \item \code{forms}: one row per instrument/form.
 \item \code{events}: one row per REDCap event when the project is longitudinal.
 \item \code{event_instruments}: one row per event/form mapping when available.

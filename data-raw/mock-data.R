@@ -208,8 +208,10 @@ mock_redcap_project <- list(
   ),
   repeating_instruments = tibble::tibble(
     event_name = "month_1_arm_1",
-    instrument_name = "adverse_events",
-    unique_event_name = "month_1_arm_1"
+    arm_num = 1L,
+    unique_event_name = "month_1_arm_1",
+    form_name = "adverse_events",
+    custom_form_label = NA_character_
   ),
   project_info = tibble::tibble(
     project_id = 1001,

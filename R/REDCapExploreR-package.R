@@ -1,33 +1,23 @@
 #' @keywords internal
 #' @aliases REDCapExploreR-package
-#' @importFrom cli cli_abort cli_fmt cli_progress_bar cli_progress_done
-#' cli_progress_update cli_text cli_vec cli_warn qty symbol
+#' @importFrom cli cli_abort cli_progress_bar cli_progress_done
+#' cli_progress_update cli_warn symbol
 #' @importFrom DT datatable
-#' @importFrom dplyr across arrange bind_rows case_when count distinct filter
-#' group_by if_any if_else n n_distinct left_join mutate pull recode relocate
-#' rename right_join row_number rowwise select slice summarise transmute ungroup
-#' bind_cols first
+#' @importFrom dplyr across arrange bind_rows case_when count cross_join distinct
+#' filter group_by if_else left_join mutate n n_distinct pull relocate rename
+#' right_join row_number select slice summarise transmute
 #' @importFrom ggplot2 aes element_blank element_text geom_tile ggplot labs
 #' scale_fill_gradientn scale_x_discrete scale_y_discrete theme theme_minimal
-#' @importFrom htmltools browsable HTML save_html tagList tags
-#' @importFrom purrr map map2 map_chr map_int map_lgl pluck pmap_chr pmap
-#' flatten_chr map2_chr reduce
+#' @importFrom htmltools browsable htmlDependency tagList tags
+#' @importFrom purrr flatten_chr map map_chr map_lgl
 #' @importFrom REDCapR redcap_arm_export redcap_event_instruments
 #' redcap_instruments redcap_event_read redcap_instrument_repeating
 #' redcap_metadata_read redcap_project_info_read redcap_read_oneshot
-#' sanitize_token
-#' @importFrom rlang .data .env !!! abort as_closure caller_arg caller_env
-#' catch_cnd check_installed cnd_muffle current_call current_env enexpr enquo
-#' env_poke eval_tidy get_env global_env is_atomic is_bare_formula
-#' is_bare_list quo_name is_installed new_environment quo_get_expr try_fetch
-#' zap as_label sym syms expr :=
+#' @importFrom rlang .data .env !!! :=
 #' @importFrom stats IQR quantile setNames
-#' @importFrom stringr str_detect str_replace str_replace_all str_squish
-#' str_trunc str_trim str_ends
+#' @importFrom stringr str_detect str_squish str_trim str_trunc
 #' @importFrom tibble as_tibble tibble
-#' @importFrom tidyr pivot_longer pivot_wider
-#' @importFrom tidyselect all_of any_of ends_with eval_select everything
-#' starts_with
+#' @importFrom tidyselect all_of any_of everything
 "_PACKAGE"
 
 ## usethis namespace: start
