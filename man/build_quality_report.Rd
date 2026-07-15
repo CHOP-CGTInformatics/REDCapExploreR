@@ -20,15 +20,20 @@ build_quality_report(
 
 \item{checks}{Character vector of check groups to run.}
 
-\item{sparse_threshold}{Missingness threshold used to flag unexpectedly sparse
-fields.}
+\item{sparse_threshold}{Number greater than 0 and less than or equal to 1.
+A field is flagged as unexpectedly sparse when its missing rate among
+applicable rows is greater than or equal to this value. The default \code{0.95}
+flags fields with at least 95 percent missing values.}
 
-\item{outlier_iqr_multiplier}{Multiplier used for IQR-based numeric outlier
-detection.}
+\item{outlier_iqr_multiplier}{Positive number used to define IQR outlier
+bounds as Q1 minus this value times the IQR and Q3 plus this value times the
+IQR. Smaller values produce narrower bounds and more findings. The default
+is \code{3}.}
 
-\item{progress}{Progress display mode. Use \code{"auto"} to show progress only in
-interactive sessions, \code{"none"} to suppress progress, or \code{"show"} to force
-progress output.}
+\item{progress}{Progress display mode. \code{"auto"} enables normally throttled
+progress updates only in interactive sessions. \code{"none"} suppresses
+progress. \code{"show"} enables progress in all sessions and forces every
+update to render.}
 }
 \value{
 A list with \code{findings}, \code{summaries}, and \code{metadata} elements.
@@ -46,8 +51,9 @@ accounts for form availability, event-form mapping, repeating instrument
 structure, and branching logic. Missingness is only assessed where the raw
 REDCap form status column \verb{<form_name>_complete} is \code{1}/Unverified or
 \code{2}/Complete. Status \code{0}/Incomplete is handled by operational checks and
-does not contribute to missingness, even when REDCap exports checkbox
-choices as \code{0}.
+does not contribute to missingness. Checkbox parent fields are observed
+when their choice exports contain explicit values, including an all-zero
+no-selection state; only an all-missing set of choice exports is missing.
 Branching expressions that use unsupported REDCap functions or smart
 variables are treated as applicable so required values remain reviewable.
 }
@@ -84,6 +90,7 @@ Current \code{findings$issue} values by \code{findings$check}:
 }
 \item \code{consistency}
 \itemize{
+\item \code{checkbox_no_values_selected}
 \item \code{checkbox_none_with_other}
 }
 }

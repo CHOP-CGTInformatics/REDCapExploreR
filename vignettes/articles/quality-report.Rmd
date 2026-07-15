@@ -23,9 +23,9 @@ This article explains how to build and navigate a report. All evaluated
 examples use `mock_quality_report`, a synthetic report included with the
 package, so they do not require REDCap credentials.
 
-## How to Use
+## How to Build a Report
 
-### Build a report
+### Generate a report object
 
 Store the REDCap API URI and token outside version-controlled code, such as in
 environment variables, and pass them to `build_quality_report()`:
@@ -55,15 +55,47 @@ report <- build_quality_report(
 )
 ```
 
-Two arguments control heuristic thresholds:
+### Set heuristic thresholds
 
-- `sparse_threshold` is the applicable-row missing rate at which a field is
-  reported as unexpectedly sparse. It defaults to `0.95`.
-- `outlier_iqr_multiplier` controls the distance from the first and third
-  quartiles used by the IQR outlier check. It defaults to `3`.
+Two arguments control when heuristic findings are produced. They do not change
+the underlying REDCap data or missing-rate calculations, but they can change
+findings and the associated `finding_count` summaries.
 
-`progress = "auto"` displays progress in interactive sessions. Use `"show"` to
-force it or `"none"` to suppress it.
+`sparse_threshold` is a proportion greater than `0` and less than or equal to
+`1`. For each field, the report calculates
+`missing_count / record_count` across rows eligible for missingness assessment.
+An `unexpected_sparse_field` finding is generated when that missing rate is
+greater than or equal to `sparse_threshold`. The default `0.95` therefore flags
+a field when at least 95% of its assessed values are missing. For example, a
+field with 19 missing values among 20 applicable rows has a missing rate of
+`0.95` and is flagged at the default threshold. Raising the threshold produces
+fewer sparse-field findings; lowering it makes the check more sensitive.
+
+`outlier_iqr_multiplier` is a positive number used only by the
+`numeric_iqr_outlier` check. For each exported numeric, non-choice field other
+than the record identifier, the report calculates the first quartile (Q1),
+third quartile (Q3), and
+`IQR = Q3 - Q1`, then defines the heuristic range as:
+
+```text
+lower bound = Q1 - outlier_iqr_multiplier * IQR
+upper bound = Q3 + outlier_iqr_multiplier * IQR
+```
+
+Values strictly outside that range are flagged. The default multiplier of `3`
+uses wider bounds than the conventional `1.5 * IQR` rule and is therefore less
+sensitive to moderate extremes. Smaller multipliers produce more findings;
+larger multipliers produce fewer. The check requires at least four observed
+values and a nonzero IQR, excludes choice fields and the record identifier, and
+does not affect REDCap validation-range or future-date findings.
+
+### Control progress output
+
+`progress = "auto"` is the default. It enables normally throttled progress
+updates in interactive sessions, such as an R console, and suppresses them in
+noninteractive scripts and most automated jobs. `progress = "show"` enables
+progress in all sessions and forces every report step to render. Use
+`progress = "none"` when no progress output should be emitted.
 
 ### Start with the report overview
 
@@ -154,7 +186,81 @@ mock_quality_report$findings |>
   )
 ```
 
-## Key Elements
+## Missingness
+
+Missingness is evaluated in two stages. The report first determines whether a
+field should be assessed on a particular exported row. It then determines
+whether that field has an observed value. This prevents structural blanks from
+events, repeating instruments, branching logic, and unfinished forms from
+being treated as missing data.
+
+### Form status determines which rows are assessed
+
+A field is eligible for missingness assessment only when its raw REDCap form
+status column, `<form_name>_complete`, is Unverified (`1`) or Complete (`2`).
+Rows with an Incomplete (`0`), blank, or unavailable form status do not
+contribute to field `record_count`, `missing_count`, or `missing_rate`.
+
+Non-Complete statuses, including Incomplete, Unverified, and blank values, are
+still reviewable through the `incomplete_form_status` operational finding. The
+distinction is intentional: Unverified forms are treated as sufficiently
+assessable but have not been marked Complete, while Incomplete forms can contain
+expected blanks that should not inflate missingness findings. If a form has no
+exported completion status column, its fields have no assessable rows and their
+missing rates are `NA`.
+
+### Per-field missingness evaluation
+
+Among rows with an assessable form status, applicability also accounts for:
+
+1. The event-to-form mapping in longitudinal projects.
+2. Repeating event and instrument configuration.
+3. The repeating instrument associated with each exported row.
+4. Supported branching logic that determines whether the field is shown.
+
+For applicable rows, `NA` and blank or whitespace-only values are missing.
+Each field summary reports:
+
+- `record_count`: applicable rows assessed for the field.
+- `missing_count`: applicable rows with a missing value.
+- `observed_count`: applicable rows with an observed value.
+- `missing_rate`: `missing_count / record_count`, or `NA` when no rows are
+  applicable.
+
+A missing required field produces a record-level `required_field_missing`
+finding. Any field, whether required or optional, can produce a field-level
+`unexpected_sparse_field` finding when its missing rate meets
+`sparse_threshold`.
+
+### Checkbox fields
+
+REDCap exports a checkbox field as one `0`/`1` column per choice. The report
+evaluates missingness at the parent-field level rather than treating every
+unchecked choice as a missing value:
+
+- One or more checked (`1`) choices make the parent checkbox field observed.
+- All choices explicitly unchecked (`0`) are also observed. This represents a
+  meaningful no-selection state rather than a missing response.
+- The parent field is missing only when every exported choice value is `NA` or
+  blank on an otherwise applicable row.
+- A checked explicit option labeled "None", "No", "Not applicable", "N/A",
+  "NA", or "None of the above" is an observed response. Selecting one of these
+  with another option can separately produce a `checkbox_none_with_other`
+  consistency finding.
+
+The form-status rule is applied first. Consequently, checkbox exports on an
+Incomplete form are ignored for missingness. On an Unverified or Complete form,
+an explicit all-zero state does not contribute to missingness, while an
+all-missing set of choice exports can contribute to sparse-field summaries and,
+for a required checkbox field, a `required_field_missing` finding.
+
+Both checkbox consistency findings use only applicable rows from Unverified or
+Complete forms. When no options are selected anywhere for a checkbox field, the
+report produces one field-level `checkbox_no_values_selected` informational
+finding. It is a prompt to confirm that the no-selection state is intentional,
+not a missingness finding.
+
+## Quality Report Structure
 
 ### Findings
 
@@ -193,7 +299,8 @@ The following checks are currently performed.
 | Outliers | `numeric_iqr_outlier` | A numeric, non-choice field falls outside the configured IQR heuristic. At least four observed values and a nonzero IQR are required. | Info, `record_field` |
 | Outliers | `future_date` | A field with date validation contains a `YYYY-MM-DD` value after the report date. | Info, `record_field` |
 | Operational | `incomplete_form_status` | An applicable form status is missing or is not Complete. | Info, `record_field` |
-| Consistency | `checkbox_none_with_other` | A checkbox option labeled as none, no, or not applicable is selected with another option. | Warning, `record_field` |
+| Consistency | `checkbox_no_values_selected` | No options are selected for a checkbox field across applicable Unverified or Complete forms. | Info, field |
+| Consistency | `checkbox_none_with_other` | A checkbox option labeled None, No, Not applicable, N/A, NA, or None of the above is selected with another option. | Warning, `record_field` |
 
 Choice fields are excluded from IQR outlier detection even when their codes are
 numeric. Yes/No and True/False fields have implicit REDCap choices, so they do
@@ -312,28 +419,6 @@ findings does not prove that the data are correct.
 persistent identifier across runs. Use issue and REDCap context columns when
 tracking findings externally.
 
-### Missingness is assessed only where a field is applicable
-
-`NA` and blank or whitespace-only values are treated as missing. For checkbox
-fields, one or more checked options make the field observed; a set of unchecked
-exports is treated as missing when the field is assessed.
-
-Applicability combines several pieces of project structure:
-
-1. Longitudinal forms are limited to events in the event-to-form mapping.
-2. Repeating instruments are identified from REDCap repeating configuration,
-   not inferred solely from rows currently present in the data export.
-3. Repeating rows are matched to their configured instrument so structural
-   blanks from other repeating instruments are not counted as missing.
-4. Branching logic limits assessment to rows where the field should be shown.
-5. Missingness is assessed only when `<form_name>_complete` is Unverified (`1`)
-   or Complete (`2`). Incomplete (`0`) forms are handled by the operational
-   check instead.
-
-This design avoids treating structural blanks as missing data. It also means a
-field can have `record_count = 0` and `missing_rate = NA` when no exported rows
-are eligible for assessment.
-
 ### Branching logic support is intentionally bounded
 
 The branching evaluator supports ordinary field comparisons, checkbox choice
@@ -356,13 +441,6 @@ distribution and the selected multiplier.
 Future-date checks apply only to fields whose REDCap validation type contains
 `date`, and values are interpreted in `YYYY-MM-DD` form. Invalid date strings
 are not reported as future dates.
-
-### Completion status drives two different questions
-
-Missingness asks whether expected values are present on forms sufficiently
-complete to assess. The operational check asks whether accessible forms have a
-Complete status. For that reason, a form marked Incomplete can produce an
-operational finding without contributing required-field missingness findings.
 
 ### Counts reflect REDCap's row structure
 

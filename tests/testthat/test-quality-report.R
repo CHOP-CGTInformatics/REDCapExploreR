@@ -574,9 +574,10 @@ test_that("build_quality_report progress display does not affect report contents
 
 test_that("API checkbox consistency findings use REDCap checkbox columns", {
   redcap_data <- tibble::tibble(
-    record_id = c("1", "2"),
-    symptoms___none = c(1, 0),
-    symptoms___fever = c(1, 1)
+    record_id = c("1", "2", "3"),
+    symptoms___none = c(1, 0, 1),
+    symptoms___fever = c(1, 1, 1),
+    main_complete = c(2, 2, 0)
   )
 
   metadata <- tibble::tibble(
@@ -601,11 +602,82 @@ test_that("API checkbox consistency findings use REDCap checkbox columns", {
   expect_equal(report$findings$value, "symptoms___none")
 })
 
+test_that("API checkbox consistency reports fields with no selected options", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2"),
+    emergency___only = c(0, 0),
+    symptoms___fever = c(0, 1),
+    unavailable___flag = c(NA, NA),
+    main_complete = c(2, 1)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "emergency", "symptoms", "unavailable"),
+    form_name = "main",
+    field_type = c("text", "checkbox", "checkbox", "checkbox"),
+    field_label = c(
+      "Record ID",
+      "Only Check In Case of Emergency",
+      "Symptoms",
+      "Unavailable Flag"
+    ),
+    select_choices_or_calculations = c(
+      NA,
+      "only, Only Check In Case of Emergency",
+      "fever, Fever",
+      "flag, Flag"
+    ),
+    required_field = "n"
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "consistency"
+  )
+
+  expect_equal(nrow(report$findings), 1)
+  expect_equal(report$findings$issue, "checkbox_no_values_selected")
+  expect_equal(report$findings$severity, "info")
+  expect_equal(report$findings$scope, "field")
+  expect_true(is.na(report$findings$record_id))
+  expect_equal(report$findings$field_name, "emergency")
+})
+
+test_that("API checkbox consistency excludes unassessed form statuses", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2"),
+    emergency___only = c(0, 0),
+    main_complete = c(0, NA)
+  )
+
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "emergency"),
+    form_name = "main",
+    field_type = c("text", "checkbox"),
+    field_label = c("Record ID", "Only Check In Case of Emergency"),
+    select_choices_or_calculations = c(
+      NA,
+      "only, Only Check In Case of Emergency"
+    ),
+    required_field = "n"
+  )
+
+  report <- build_mock_quality_report(
+    data = redcap_data,
+    metadata = metadata,
+    checks = "consistency"
+  )
+
+  expect_equal(nrow(report$findings), 0)
+})
+
 test_that("API checkbox consistency uses metadata choice values", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     symptoms___99 = c(1, 0),
-    symptoms___1 = c(1, 1)
+    symptoms___1 = c(1, 1),
+    main_complete = 2
   )
   metadata <- tibble::tibble(
     field_name = c("record_id", "symptoms"),
@@ -928,7 +1000,7 @@ test_that("API missingness excludes forms without status columns", {
   expect_equal(report$summaries$records$missing_field_count, c(0, 0))
 })
 
-test_that("API missingness ignores unchecked checkbox exports on incomplete forms", {
+test_that("API missingness treats explicit unchecked checkbox values as observed", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     symptoms___fever = c(0, 0),
@@ -956,16 +1028,23 @@ test_that("API missingness ignores unchecked checkbox exports on incomplete form
     report$findings |>
       dplyr::filter(.data$issue == "required_field_missing") |>
       dplyr::select("record_id", "field_name"),
-    tibble::tibble(
-      record_id = c("2", "2"),
-      field_name = c("symptoms", "detail")
-    )
+    tibble::tibble(record_id = "2", field_name = "detail")
   )
   expect_equal(
     report$summaries$fields |>
       dplyr::filter(.data$field_name == "symptoms") |>
-      dplyr::select("record_count", "missing_count", "missing_rate"),
-    tibble::tibble(record_count = 1L, missing_count = 1L, missing_rate = 1)
+      dplyr::select(
+        "record_count",
+        "missing_count",
+        "observed_count",
+        "missing_rate"
+      ),
+    tibble::tibble(
+      record_count = 1L,
+      missing_count = 0L,
+      observed_count = 1L,
+      missing_rate = 0
+    )
   )
   expect_equal(
     report$summaries$fields |>
@@ -975,12 +1054,12 @@ test_that("API missingness ignores unchecked checkbox exports on incomplete form
   )
 })
 
-test_that("API missingness treats checked checkbox options as observed", {
+test_that("API missingness distinguishes checkbox values from unavailable data", {
   redcap_data <- tibble::tibble(
-    record_id = c("1", "2"),
-    symptoms___fever = c(1, 0),
-    symptoms___rash = c(0, 0),
-    symptoms_complete = c(2, 2)
+    record_id = c("1", "2", "3"),
+    symptoms___fever = c(1, 0, NA),
+    symptoms___rash = c(0, 0, NA),
+    symptoms_complete = c(2, 2, 2)
   )
 
   metadata <- tibble::tibble(
@@ -1002,7 +1081,7 @@ test_that("API missingness treats checked checkbox options as observed", {
     report$findings |>
       dplyr::filter(.data$issue == "required_field_missing") |>
       dplyr::select("record_id", "field_name"),
-    tibble::tibble(record_id = "2", field_name = "symptoms")
+    tibble::tibble(record_id = "3", field_name = "symptoms")
   )
   expect_equal(
     report$summaries$fields |>
@@ -1014,10 +1093,10 @@ test_that("API missingness treats checked checkbox options as observed", {
         "missing_rate"
       ),
     tibble::tibble(
-      record_count = 2L,
+      record_count = 3L,
       missing_count = 1L,
-      observed_count = 1L,
-      missing_rate = 0.5
+      observed_count = 2L,
+      missing_rate = 1 / 3
     )
   )
 })
