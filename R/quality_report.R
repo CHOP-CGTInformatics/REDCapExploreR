@@ -8,13 +8,18 @@
 #' @param redcap_uri REDCap API URI.
 #' @param token REDCap API token.
 #' @param checks Character vector of check groups to run.
-#' @param sparse_threshold Missingness threshold used to flag unexpectedly sparse
-#'   fields.
-#' @param outlier_iqr_multiplier Multiplier used for IQR-based numeric outlier
-#'   detection.
-#' @param progress Progress display mode. Use `"auto"` to show progress only in
-#'   interactive sessions, `"none"` to suppress progress, or `"show"` to force
-#'   progress output.
+#' @param sparse_threshold Number greater than 0 and less than or equal to 1.
+#'   A field is flagged as unexpectedly sparse when its missing rate among
+#'   applicable rows is greater than or equal to this value. The default `0.95`
+#'   flags fields with at least 95 percent missing values.
+#' @param outlier_iqr_multiplier Positive number used to define IQR outlier
+#'   bounds as Q1 minus this value times the IQR and Q3 plus this value times the
+#'   IQR. Smaller values produce narrower bounds and more findings. The default
+#'   is `3`.
+#' @param progress Progress display mode. `"auto"` enables normally throttled
+#'   progress updates only in interactive sessions. `"none"` suppresses
+#'   progress. `"show"` enables progress in all sessions and forces every
+#'   update to render.
 #'
 #' @details
 #' Current `findings$issue` values by `findings$check`:
@@ -35,6 +40,7 @@
 #' - `operational`
 #'   - `incomplete_form_status`
 #' - `consistency`
+#'   - `checkbox_no_values_selected`
 #'   - `checkbox_none_with_other`
 #'
 #' @returns A list with `findings`, `summaries`, and `metadata` elements.
@@ -52,8 +58,9 @@
 #'   structure, and branching logic. Missingness is only assessed where the raw
 #'   REDCap form status column `<form_name>_complete` is `1`/Unverified or
 #'   `2`/Complete. Status `0`/Incomplete is handled by operational checks and
-#'   does not contribute to missingness, even when REDCap exports checkbox
-#'   choices as `0`.
+#'   does not contribute to missingness. Checkbox parent fields are observed
+#'   when their choice exports contain explicit values, including an all-zero
+#'   no-selection state; only an all-missing set of choice exports is missing.
 #'   Branching expressions that use unsupported REDCap functions or smart
 #'   variables are treated as applicable so required values remain reviewable.
 #'
@@ -794,12 +801,19 @@ get_field_values <- function(project, field) {
     return(rep(NA_character_, nrow(project$data)))
   }
 
-  checked <- as.data.frame(map(project$data[checkbox_columns], get_is_checked))
+  checkbox_data <- project$data[checkbox_columns]
+  checked <- as.data.frame(map(checkbox_data, get_is_checked))
+  missing <- as.data.frame(map(checkbox_data, get_is_missing))
   checked_names <- sub(paste0("^", field, "___"), "", checkbox_columns)
   map_chr(seq_len(nrow(checked)), \(row) {
     row_checked <- unlist(checked[row, ], use.names = FALSE)
-    if (!any(row_checked, na.rm = TRUE)) {
+    row_missing <- unlist(missing[row, ], use.names = FALSE)
+    if (all(row_missing)) {
       return(NA_character_)
+    }
+
+    if (!any(row_checked, na.rm = TRUE)) {
+      return("No selections")
     }
 
     paste(checked_names[row_checked], collapse = ", ")
@@ -1358,11 +1372,16 @@ get_consistency_findings <- function(project) {
 
   bind_rows(map(names(checkbox_groups), \(field) {
     columns <- checkbox_groups[[field]]
+    no_selection_finding <- get_checkbox_no_selection_finding(
+      project,
+      field,
+      columns
+    )
     none_columns <- get_none_choice_columns(choices, field, columns)
     other_columns <- setdiff(columns, none_columns)
 
     if (length(none_columns) == 0 || length(other_columns) == 0) {
-      return(get_empty_findings())
+      return(no_selection_finding)
     }
 
     none_checked <- Reduce(
@@ -1373,38 +1392,82 @@ get_consistency_findings <- function(project) {
       `|`,
       lapply(project$data[other_columns], get_is_checked)
     )
-    contradiction <- none_checked & other_checked
+    contradiction <- none_checked &
+      other_checked &
+      get_field_applicable_rows(project, field)
 
     if (!any(contradiction, na.rm = TRUE)) {
-      return(get_empty_findings())
+      return(no_selection_finding)
     }
 
     metadata_row <- get_metadata_row(project, field)
-    tibble(
-      check = "consistency",
-      issue = "checkbox_none_with_other",
-      severity = "warning",
-      scope = "record_field",
-      record_id = as.character(project$data[[project$record_id_field]][
-        contradiction
-      ]),
-      form_name = metadata_row$form_name,
-      event_name = get_event_values(project$data, contradiction),
-      repeat_instrument = get_repeat_instrument_values(
-        project$data,
-        contradiction
-      ),
-      repeat_instance = get_repeat_instance_values(project$data, contradiction),
-      field_name = field,
-      value = paste(none_columns, collapse = ", "),
-      expected = "None option not selected with other options",
-      message = paste(
-        "Checkbox field",
-        field,
-        "has a none option selected with another option."
+    bind_rows(
+      no_selection_finding,
+      tibble(
+        check = "consistency",
+        issue = "checkbox_none_with_other",
+        severity = "warning",
+        scope = "record_field",
+        record_id = as.character(project$data[[project$record_id_field]][
+          contradiction
+        ]),
+        form_name = metadata_row$form_name,
+        event_name = get_event_values(project$data, contradiction),
+        repeat_instrument = get_repeat_instrument_values(
+          project$data,
+          contradiction
+        ),
+        repeat_instance = get_repeat_instance_values(
+          project$data,
+          contradiction
+        ),
+        field_name = field,
+        value = paste(none_columns, collapse = ", "),
+        expected = "None option not selected with other options",
+        message = paste(
+          "Checkbox field",
+          field,
+          "has a none option selected with another option."
+        )
       )
     )
   }))
+}
+
+get_checkbox_no_selection_finding <- function(project, field, columns) {
+  assessed <- get_field_applicable_rows(project, field)
+  explicit <- as.data.frame(map(
+    project$data[columns],
+    \(value) !get_is_missing(value)
+  ))
+  checked <- as.data.frame(map(project$data[columns], get_is_checked))
+  assessed_explicit <- assessed & rowSums(explicit) > 0
+
+  if (
+    !any(assessed_explicit) ||
+      any(rowSums(checked[assessed_explicit, , drop = FALSE]) > 0)
+  ) {
+    return(get_empty_findings())
+  }
+
+  metadata_row <- get_metadata_row(project, field)
+  tibble(
+    check = "consistency",
+    issue = "checkbox_no_values_selected",
+    severity = "info",
+    scope = "field",
+    record_id = NA_character_,
+    form_name = metadata_row$form_name,
+    event_name = NA_character_,
+    field_name = field,
+    value = "0 selected options",
+    expected = "Confirm that no selections are intentional",
+    message = paste(
+      "Checkbox field",
+      field,
+      "has no selected options among assessed rows."
+    )
+  )
 }
 
 get_none_choice_columns <- function(choices, field, columns) {
