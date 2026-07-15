@@ -220,7 +220,7 @@ mock_quality_report
 #> <REDCap quality report>
 #> Records: 3
 #> Fields: 11
-#> Findings: 8
+#> Findings: 7
 
 mock_quality_report$findings |>
   dplyr::select(
@@ -232,7 +232,7 @@ mock_quality_report$findings |>
     field_name,
     message
   )
-#> # A tibble: 8 × 7
+#> # A tibble: 7 × 7
 #>   check       issue              severity record_id form_name field_name message
 #>   <chr>       <chr>              <chr>    <chr>     <chr>     <chr>      <chr>  
 #> 1 metadata    high_risk_free_te… info     NA        follow_up visit_not… Free-t…
@@ -242,7 +242,6 @@ mock_quality_report$findings |>
 #> 5 operational incomplete_form_s… info     C002      follow_up follow_up… Comple…
 #> 6 operational incomplete_form_s… info     C002      adverse_… adverse_e… Comple…
 #> 7 operational incomplete_form_s… info     C0003     adverse_… adverse_e… Comple…
-#> 8 consistency checkbox_none_wit… warning  C002      follow_up symptoms   Checkb…
 
 mock_quality_report$summaries$project
 #> # A tibble: 1 × 8

@@ -33,17 +33,23 @@ build_quality_report(
 
 - sparse_threshold:
 
-  Missingness threshold used to flag unexpectedly sparse fields.
+  Number greater than 0 and less than or equal to 1. A field is flagged
+  as unexpectedly sparse when its missing rate among applicable rows is
+  greater than or equal to this value. The default `0.95` flags fields
+  with at least 95 percent missing values.
 
 - outlier_iqr_multiplier:
 
-  Multiplier used for IQR-based numeric outlier detection.
+  Positive number used to define IQR outlier bounds as Q1 minus this
+  value times the IQR and Q3 plus this value times the IQR. Smaller
+  values produce narrower bounds and more findings. The default is `3`.
 
 - progress:
 
-  Progress display mode. Use `"auto"` to show progress only in
-  interactive sessions, `"none"` to suppress progress, or `"show"` to
-  force progress output.
+  Progress display mode. `"auto"` enables normally throttled progress
+  updates only in interactive sessions. `"none"` suppresses progress.
+  `"show"` enables progress in all sessions and forces every update to
+  render.
 
 ## Value
 
@@ -63,8 +69,10 @@ Applicability accounts for form availability, event-form mapping,
 repeating instrument structure, and branching logic. Missingness is only
 assessed where the raw REDCap form status column `<form_name>_complete`
 is `1`/Unverified or `2`/Complete. Status `0`/Incomplete is handled by
-operational checks and does not contribute to missingness, even when
-REDCap exports checkbox choices as `0`. Branching expressions that use
+operational checks and does not contribute to missingness. Checkbox
+parent fields are observed when their choice exports contain explicit
+values, including an all-zero no-selection state; only an all-missing
+set of choice exports is missing. Branching expressions that use
 unsupported REDCap functions or smart variables are treated as
 applicable so required values remain reviewable.
 
@@ -103,6 +111,8 @@ Current `findings$issue` values by `findings$check`:
   - `incomplete_form_status`
 
 - `consistency`
+
+  - `checkbox_no_values_selected`
 
   - `checkbox_none_with_other`
 

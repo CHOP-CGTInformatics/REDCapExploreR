@@ -83,10 +83,10 @@ evaluated examples use <code>mock_quality_report</code>, a synthetic
 report included with the package, so they do not require REDCap
 credentials.</p>
 <div class="section level2">
-<h2 id="how-to-use">How to Use<a class="anchor" aria-label="anchor" href="#how-to-use"></a>
+<h2 id="how-to-build-a-report">How to Build a Report<a class="anchor" aria-label="anchor" href="#how-to-build-a-report"></a>
 </h2>
 <div class="section level3">
-<h3 id="build-a-report">Build a report<a class="anchor" aria-label="anchor" href="#build-a-report"></a>
+<h3 id="generate-a-report-object">Generate a report object<a class="anchor" aria-label="anchor" href="#generate-a-report-object"></a>
 </h3>
 <p>Store the REDCap API URI and token outside version-controlled code,
 such as in environment variables, and pass them to
@@ -112,20 +112,51 @@ built with all default check groups and thresholds.</p>
 <span>  checks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"missingness"</span>, <span class="st">"metadata"</span><span class="op">)</span>,</span>
 <span>  progress <span class="op">=</span> <span class="st">"none"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p>Two arguments control heuristic thresholds:</p>
-<ul>
-<li>
-<code>sparse_threshold</code> is the applicable-row missing rate at
-which a field is reported as unexpectedly sparse. It defaults to
-<code>0.95</code>.</li>
-<li>
-<code>outlier_iqr_multiplier</code> controls the distance from the
-first and third quartiles used by the IQR outlier check. It defaults to
-<code>3</code>.</li>
-</ul>
-<p><code>progress = "auto"</code> displays progress in interactive
-sessions. Use <code>"show"</code> to force it or <code>"none"</code> to
-suppress it.</p>
+</div>
+<div class="section level3">
+<h3 id="set-heuristic-thresholds">Set heuristic thresholds<a class="anchor" aria-label="anchor" href="#set-heuristic-thresholds"></a>
+</h3>
+<p>Two arguments control when heuristic findings are produced. They do
+not change the underlying REDCap data or missing-rate calculations, but
+they can change findings and the associated <code>finding_count</code>
+summaries.</p>
+<p><code>sparse_threshold</code> is a proportion greater than
+<code>0</code> and less than or equal to <code>1</code>. For each field,
+the report calculates <code>missing_count / record_count</code> across
+rows eligible for missingness assessment. An
+<code>unexpected_sparse_field</code> finding is generated when that
+missing rate is greater than or equal to <code>sparse_threshold</code>.
+The default <code>0.95</code> therefore flags a field when at least 95%
+of its assessed values are missing. For example, a field with 19 missing
+values among 20 applicable rows has a missing rate of <code>0.95</code>
+and is flagged at the default threshold. Raising the threshold produces
+fewer sparse-field findings; lowering it makes the check more
+sensitive.</p>
+<p><code>outlier_iqr_multiplier</code> is a positive number used only by
+the <code>numeric_iqr_outlier</code> check. For each exported numeric,
+non-choice field other than the record identifier, the report calculates
+the first quartile (Q1), third quartile (Q3), and
+<code>IQR = Q3 - Q1</code>, then defines the heuristic range as:</p>
+<pre class="text"><code>lower bound = Q1 - outlier_iqr_multiplier * IQR
+upper bound = Q3 + outlier_iqr_multiplier * IQR</code></pre>
+<p>Values strictly outside that range are flagged. The default
+multiplier of <code>3</code> uses wider bounds than the conventional
+<code>1.5 * IQR</code> rule and is therefore less sensitive to moderate
+extremes. Smaller multipliers produce more findings; larger multipliers
+produce fewer. The check requires at least four observed values and a
+nonzero IQR, excludes choice fields and the record identifier, and does
+not affect REDCap validation-range or future-date findings.</p>
+</div>
+<div class="section level3">
+<h3 id="control-progress-output">Control progress output<a class="anchor" aria-label="anchor" href="#control-progress-output"></a>
+</h3>
+<p><code>progress = "auto"</code> is the default. It enables normally
+throttled progress updates in interactive sessions, such as an R
+console, and suppresses them in noninteractive scripts and most
+automated jobs. <code>progress = "show"</code> enables progress in all
+sessions and forces every report step to render. Use
+<code>progress = "none"</code> when no progress output should be
+emitted.</p>
 </div>
 <div class="section level3">
 <h3 id="start-with-the-report-overview">Start with the report overview<a class="anchor" aria-label="anchor" href="#start-with-the-report-overview"></a>
@@ -133,12 +164,12 @@ suppress it.</p>
 <p>Printing the report gives a short project-level overview. The object
 itself is a list with <code>findings</code>, <code>summaries</code>, and
 <code>metadata</code> elements.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span></span>
 <span><span class="co">#&gt; &lt;REDCap quality report&gt;</span></span>
 <span><span class="co">#&gt; Records: 3</span></span>
 <span><span class="co">#&gt; Fields: 11</span></span>
-<span><span class="co">#&gt; Findings: 8</span></span>
+<span><span class="co">#&gt; Findings: 7</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">mock_quality_report</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "findings"  "summaries" "metadata"</span></span>
@@ -152,7 +183,7 @@ itself is a list with <code>findings</code>, <code>summaries</code>, and
 <p>Begin with the project summary and a count of findings by check and
 issue. This shows the size and structure of the project alongside the
 types of review items that were found.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">project</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 8</span></span></span>
 <span><span class="co">#&gt;   record_count raw_row_count field_count form_count event_count</span></span>
@@ -163,14 +194,13 @@ types of review items that were found.</p>
 <span></span>
 <span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/count.html" class="external-link">count</a></span><span class="op">(</span><span class="va">check</span>, <span class="va">issue</span>, <span class="va">severity</span>, sort <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 4</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 4 × 4</span></span></span>
 <span><span class="co">#&gt;   check       issue                    severity     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> operational incomplete_form_status   info         4</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> consistency checkbox_none_with_other warning      1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> metadata    high_risk_free_text      info         1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> outliers    future_date              info         1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> outliers    outside_validation_range warning      1</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> metadata    high_risk_free_text      info         1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> outliers    future_date              info         1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> outliers    outside_validation_range warning      1</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="review-actionable-findings">Review actionable findings<a class="anchor" aria-label="anchor" href="#review-actionable-findings"></a>
@@ -178,7 +208,7 @@ types of review items that were found.</p>
 <p>Use <code>scope</code> to distinguish findings tied to a specific
 record and field from field-level metadata findings. The context columns
 remain available for longitudinal and repeating projects.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">record_findings</span> <span class="op">&lt;-</span> <span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">scope</span> <span class="op">==</span> <span class="st">"record_field"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span></span>
@@ -195,7 +225,7 @@ remain available for longitudinal and repeating projects.</p>
 <span>  <span class="op">)</span></span>
 <span></span>
 <span><span class="va">record_findings</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 7 × 10</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 10</span></span></span>
 <span><span class="co">#&gt;   finding_id severity issue               record_id event_name repeat_instrument</span></span>
 <span><span class="co">#&gt;        <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>               <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>          2 warning  outside_validation… C002      baseline_… <span style="color: #BB0000;">NA</span>               </span></span>
@@ -204,13 +234,12 @@ remain available for longitudinal and repeating projects.</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>          5 info     incomplete_form_st… C002      month_1_a… <span style="color: #BB0000;">NA</span>               </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>          6 info     incomplete_form_st… C002      month_1_a… adverse_events   </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span>          7 info     incomplete_form_st… C0003     month_1_a… adverse_events   </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">7</span>          8 warning  checkbox_none_with… C002      month_1_a… <span style="color: #BB0000;">NA</span>               </span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># ℹ 4 more variables: repeat_instance &lt;chr&gt;, field_name &lt;chr&gt;, value &lt;chr&gt;,</span></span></span>
 <span><span class="co">#&gt; <span style="color: #949494;">#   expected &lt;chr&gt;</span></span></span></code></pre></div>
 <p>Filter by record, issue, form, or severity to create a review queue.
 Severity is a package-provided prioritization aid, not a clinical or
 regulatory classification.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">record_id</span> <span class="op">==</span> <span class="st">"C002"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span></span>
@@ -223,17 +252,16 @@ regulatory classification.</p>
 <span>    <span class="va">expected</span>,</span>
 <span>    <span class="va">message</span></span>
 <span>  <span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 5 × 8</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 4 × 8</span></span></span>
 <span><span class="co">#&gt;   finding_id severity issue          form_name field_name value expected message</span></span>
 <span><span class="co">#&gt;        <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>          2 warning  outside_valid… demograp… age        999   Between… Field …</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>          3 info     future_date    demograp… enrollmen… 2999… On or b… Date f…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>          5 info     incomplete_fo… follow_up follow_up… Inco… Complete Comple…</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>          6 info     incomplete_fo… adverse_… adverse_e… Unve… Complete Comple…</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span>          8 warning  checkbox_none… follow_up symptoms   symp… None op… Checkb…</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>          6 info     incomplete_fo… adverse_… adverse_e… Unve… Complete Comple…</span></span></code></pre></div>
 <p>Join findings to interpreted field metadata when labels and field
 types are useful during review:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">field_reference</span> <span class="op">&lt;-</span> <span class="va">mock_quality_report</span><span class="op">$</span><span class="va">metadata</span><span class="op">$</span><span class="va">fields</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">field_name</span>, <span class="va">field_label</span>, <span class="va">field_type</span>, <span class="va">required_field</span><span class="op">)</span></span>
 <span></span>
@@ -249,17 +277,111 @@ types are useful during review:</p>
 <span>    <span class="va">field_type</span>,</span>
 <span>    <span class="va">required_field</span></span>
 <span>  <span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 4 × 7</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 3 × 7</span></span></span>
 <span><span class="co">#&gt;   finding_id issue    record_id field_name field_label field_type required_field</span></span>
 <span><span class="co">#&gt;        <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>         </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>          1 high_ri… <span style="color: #BB0000;">NA</span>        visit_not… Visit notes notes      FALSE         </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>          2 outside… C002      age        Age at enr… text       TRUE          </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>          3 future_… C002      enrollmen… Enrollment… text       TRUE          </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>          8 checkbo… C002      symptoms   Symptoms    checkbox   FALSE</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>          3 future_… C002      enrollmen… Enrollment… text       TRUE</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
-<h2 id="key-elements">Key Elements<a class="anchor" aria-label="anchor" href="#key-elements"></a>
+<h2 id="missingness">Missingness<a class="anchor" aria-label="anchor" href="#missingness"></a>
+</h2>
+<p>Missingness is evaluated in two stages. The report first determines
+whether a field should be assessed on a particular exported row. It then
+determines whether that field has an observed value. This prevents
+structural blanks from events, repeating instruments, branching logic,
+and unfinished forms from being treated as missing data.</p>
+<div class="section level3">
+<h3 id="form-status-determines-which-rows-are-assessed">Form status determines which rows are assessed<a class="anchor" aria-label="anchor" href="#form-status-determines-which-rows-are-assessed"></a>
+</h3>
+<p>A field is eligible for missingness assessment only when its raw
+REDCap form status column, <code>&lt;form_name&gt;_complete</code>, is
+Unverified (<code>1</code>) or Complete (<code>2</code>). Rows with an
+Incomplete (<code>0</code>), blank, or unavailable form status do not
+contribute to field <code>record_count</code>,
+<code>missing_count</code>, or <code>missing_rate</code>.</p>
+<p>Non-Complete statuses, including Incomplete, Unverified, and blank
+values, are still reviewable through the
+<code>incomplete_form_status</code> operational finding. The distinction
+is intentional: Unverified forms are treated as sufficiently assessable
+but have not been marked Complete, while Incomplete forms can contain
+expected blanks that should not inflate missingness findings. If a form
+has no exported completion status column, its fields have no assessable
+rows and their missing rates are <code>NA</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="per-field-missingness-evaluation">Per-field missingness evaluation<a class="anchor" aria-label="anchor" href="#per-field-missingness-evaluation"></a>
+</h3>
+<p>Among rows with an assessable form status, applicability also
+accounts for:</p>
+<ol style="list-style-type: decimal">
+<li>The event-to-form mapping in longitudinal projects.</li>
+<li>Repeating event and instrument configuration.</li>
+<li>The repeating instrument associated with each exported row.</li>
+<li>Supported branching logic that determines whether the field is
+shown.</li>
+</ol>
+<p>For applicable rows, <code>NA</code> and blank or whitespace-only
+values are missing. Each field summary reports:</p>
+<ul>
+<li>
+<code>record_count</code>: applicable rows assessed for the
+field.</li>
+<li>
+<code>missing_count</code>: applicable rows with a missing
+value.</li>
+<li>
+<code>observed_count</code>: applicable rows with an observed
+value.</li>
+<li>
+<code>missing_rate</code>:
+<code>missing_count / record_count</code>, or <code>NA</code> when no
+rows are applicable.</li>
+</ul>
+<p>A missing required field produces a record-level
+<code>required_field_missing</code> finding. Any field, whether required
+or optional, can produce a field-level
+<code>unexpected_sparse_field</code> finding when its missing rate meets
+<code>sparse_threshold</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="checkbox-fields">Checkbox fields<a class="anchor" aria-label="anchor" href="#checkbox-fields"></a>
+</h3>
+<p>REDCap exports a checkbox field as one <code>0</code>/<code>1</code>
+column per choice. The report evaluates missingness at the parent-field
+level rather than treating every unchecked choice as a missing
+value:</p>
+<ul>
+<li>One or more checked (<code>1</code>) choices make the parent
+checkbox field observed.</li>
+<li>All choices explicitly unchecked (<code>0</code>) are also observed.
+This represents a meaningful no-selection state rather than a missing
+response.</li>
+<li>The parent field is missing only when every exported choice value is
+<code>NA</code> or blank on an otherwise applicable row.</li>
+<li>A checked explicit option labeled “None”, “No”, “Not applicable”,
+“N/A”, “NA”, or “None of the above” is an observed response. Selecting
+one of these with another option can separately produce a
+<code>checkbox_none_with_other</code> consistency finding.</li>
+</ul>
+<p>The form-status rule is applied first. Consequently, checkbox exports
+on an Incomplete form are ignored for missingness. On an Unverified or
+Complete form, an explicit all-zero state does not contribute to
+missingness, while an all-missing set of choice exports can contribute
+to sparse-field summaries and, for a required checkbox field, a
+<code>required_field_missing</code> finding.</p>
+<p>Both checkbox consistency findings use only applicable rows from
+Unverified or Complete forms. When no options are selected anywhere for
+a checkbox field, the report produces one field-level
+<code>checkbox_no_values_selected</code> informational finding. It is a
+prompt to confirm that the no-selection state is intentional, not a
+missingness finding.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="quality-report-structure">Quality Report Structure<a class="anchor" aria-label="anchor" href="#quality-report-structure"></a>
 </h2>
 <div class="section level3">
 <h3 id="findings">Findings<a class="anchor" aria-label="anchor" href="#findings"></a>
@@ -436,9 +558,16 @@ value after the report date.</td>
 </tr>
 <tr class="even">
 <td>Consistency</td>
+<td><code>checkbox_no_values_selected</code></td>
+<td>No options are selected for a checkbox field across applicable
+Unverified or Complete forms.</td>
+<td>Info, field</td>
+</tr>
+<tr class="odd">
+<td>Consistency</td>
 <td><code>checkbox_none_with_other</code></td>
-<td>A checkbox option labeled as none, no, or not applicable is selected
-with another option.</td>
+<td>A checkbox option labeled None, No, Not applicable, N/A, NA, or None
+of the above is selected with another option.</td>
 <td>Warning, <code>record_field</code>
 </td>
 </tr>
@@ -477,7 +606,7 @@ applicable field-row cells.</li>
 <code>finding_count</code>: total number of findings from the
 selected check groups.</li>
 </ul>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">project</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 8</span></span></span>
 <span><span class="co">#&gt;   record_count raw_row_count field_count form_count event_count</span></span>
@@ -509,7 +638,7 @@ rows are applicable.</li>
 <li>
 <code>distinct_count</code> counts unique nonmissing values.</li>
 </ul>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">forms</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 3 × 4</span></span></span>
 <span><span class="co">#&gt;   form_name      field_count required_field_count missing_rate</span></span>
@@ -558,13 +687,13 @@ across that record’s events and repeat instances, while
 metadata findings do not belong to an individual record.</p>
 <p><code>summaries$events</code> counts raw API rows by unique event
 name. It is empty for nonlongitudinal projects.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">records</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">finding_count</span><span class="op">)</span>, <span class="va">record_id</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 3 × 3</span></span></span>
 <span><span class="co">#&gt;   record_id missing_field_count finding_count</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> C002                        0             5</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> C002                        0             4</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> C0003                       0             2</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> C001                        0             0</span></span>
 <span></span>
@@ -644,7 +773,7 @@ choices.</td>
 <p>These tables are useful for interpreting findings and for
 project-level review that is not represented by a finding. For example,
 inspect repeating structure and validation rules directly:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">metadata</span><span class="op">$</span><span class="va">repeating_instruments</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 6</span></span></span>
 <span><span class="co">#&gt;   event_name    arm_num unique_event_name form_name      custom_form_label</span></span>
@@ -687,35 +816,6 @@ not be treated as a persistent identifier across runs. Use issue and
 REDCap context columns when tracking findings externally.</p>
 </div>
 <div class="section level3">
-<h3 id="missingness-is-assessed-only-where-a-field-is-applicable">Missingness is assessed only where a field is applicable<a class="anchor" aria-label="anchor" href="#missingness-is-assessed-only-where-a-field-is-applicable"></a>
-</h3>
-<p><code>NA</code> and blank or whitespace-only values are treated as
-missing. For checkbox fields, one or more checked options make the field
-observed; a set of unchecked exports is treated as missing when the
-field is assessed.</p>
-<p>Applicability combines several pieces of project structure:</p>
-<ol style="list-style-type: decimal">
-<li>Longitudinal forms are limited to events in the event-to-form
-mapping.</li>
-<li>Repeating instruments are identified from REDCap repeating
-configuration, not inferred solely from rows currently present in the
-data export.</li>
-<li>Repeating rows are matched to their configured instrument so
-structural blanks from other repeating instruments are not counted as
-missing.</li>
-<li>Branching logic limits assessment to rows where the field should be
-shown.</li>
-<li>Missingness is assessed only when
-<code>&lt;form_name&gt;_complete</code> is Unverified (<code>1</code>)
-or Complete (<code>2</code>). Incomplete (<code>0</code>) forms are
-handled by the operational check instead.</li>
-</ol>
-<p>This design avoids treating structural blanks as missing data. It
-also means a field can have <code>record_count = 0</code> and
-<code>missing_rate = NA</code> when no exported rows are eligible for
-assessment.</p>
-</div>
-<div class="section level3">
 <h3 id="branching-logic-support-is-intentionally-bounded">Branching logic support is intentionally bounded<a class="anchor" aria-label="anchor" href="#branching-logic-support-is-intentionally-bounded"></a>
 </h3>
 <p>The branching evaluator supports ordinary field comparisons, checkbox
@@ -741,15 +841,6 @@ multiplier.</p>
 contains <code>date</code>, and values are interpreted in
 <code>YYYY-MM-DD</code> form. Invalid date strings are not reported as
 future dates.</p>
-</div>
-<div class="section level3">
-<h3 id="completion-status-drives-two-different-questions">Completion status drives two different questions<a class="anchor" aria-label="anchor" href="#completion-status-drives-two-different-questions"></a>
-</h3>
-<p>Missingness asks whether expected values are present on forms
-sufficiently complete to assess. The operational check asks whether
-accessible forms have a Complete status. For that reason, a form marked
-Incomplete can produce an operational finding without contributing
-required-field missingness findings.</p>
 </div>
 <div class="section level3">
 <h3 id="counts-reflect-redcaps-row-structure">Counts reflect REDCap’s row structure<a class="anchor" aria-label="anchor" href="#counts-reflect-redcaps-row-structure"></a>

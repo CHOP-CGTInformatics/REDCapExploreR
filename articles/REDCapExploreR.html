@@ -238,7 +238,7 @@ output and example findings.</p>
 <span><span class="co">#&gt; &lt;REDCap quality report&gt;</span></span>
 <span><span class="co">#&gt; Records: 3</span></span>
 <span><span class="co">#&gt; Fields: 11</span></span>
-<span><span class="co">#&gt; Findings: 8</span></span>
+<span><span class="co">#&gt; Findings: 7</span></span>
 <span></span>
 <span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span></span>
@@ -250,7 +250,7 @@ output and example findings.</p>
 <span>    <span class="va">field_name</span>,</span>
 <span>    <span class="va">message</span></span>
 <span>  <span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 8 × 7</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 7 × 7</span></span></span>
 <span><span class="co">#&gt;   check       issue              severity record_id form_name field_name message</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> metadata    high_risk_free_te… info     <span style="color: #BB0000;">NA</span>        follow_up visit_not… Free-t…</span></span>
@@ -260,7 +260,6 @@ output and example findings.</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> operational incomplete_form_s… info     C002      follow_up follow_up… Comple…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> operational incomplete_form_s… info     C002      adverse_… adverse_e… Comple…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">7</span> operational incomplete_form_s… info     C0003     adverse_… adverse_e… Comple…</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">8</span> consistency checkbox_none_wit… warning  C002      follow_up symptoms   Checkb…</span></span>
 <span></span>
 <span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">project</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 8</span></span></span>

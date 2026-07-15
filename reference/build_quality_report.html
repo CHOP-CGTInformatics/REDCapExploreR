@@ -76,19 +76,24 @@ interpreted metadata.</p>
 
 
 <dt id="arg-sparse-threshold">sparse_threshold<a class="anchor" aria-label="anchor" href="#arg-sparse-threshold"></a></dt>
-<dd><p>Missingness threshold used to flag unexpectedly sparse
-fields.</p></dd>
+<dd><p>Number greater than 0 and less than or equal to 1.
+A field is flagged as unexpectedly sparse when its missing rate among
+applicable rows is greater than or equal to this value. The default <code>0.95</code>
+flags fields with at least 95 percent missing values.</p></dd>
 
 
 <dt id="arg-outlier-iqr-multiplier">outlier_iqr_multiplier<a class="anchor" aria-label="anchor" href="#arg-outlier-iqr-multiplier"></a></dt>
-<dd><p>Multiplier used for IQR-based numeric outlier
-detection.</p></dd>
+<dd><p>Positive number used to define IQR outlier
+bounds as Q1 minus this value times the IQR and Q3 plus this value times the
+IQR. Smaller values produce narrower bounds and more findings. The default
+is <code>3</code>.</p></dd>
 
 
 <dt id="arg-progress">progress<a class="anchor" aria-label="anchor" href="#arg-progress"></a></dt>
-<dd><p>Progress display mode. Use <code>"auto"</code> to show progress only in
-interactive sessions, <code>"none"</code> to suppress progress, or <code>"show"</code> to force
-progress output.</p></dd>
+<dd><p>Progress display mode. <code>"auto"</code> enables normally throttled
+progress updates only in interactive sessions. <code>"none"</code> suppresses
+progress. <code>"show"</code> enables progress in all sessions and forces every
+update to render.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -108,8 +113,9 @@ accounts for form availability, event-form mapping, repeating instrument
 structure, and branching logic. Missingness is only assessed where the raw
 REDCap form status column <code>&lt;form_name&gt;_complete</code> is <code>1</code>/Unverified or
 <code>2</code>/Complete. Status <code>0</code>/Incomplete is handled by operational checks and
-does not contribute to missingness, even when REDCap exports checkbox
-choices as <code>0</code>.
+does not contribute to missingness. Checkbox parent fields are observed
+when their choice exports contain explicit values, including an all-zero
+no-selection state; only an all-missing set of choice exports is missing.
 Branching expressions that use unsupported REDCap functions or smart
 variables are treated as applicable so required values remain reviewable.</p>
     </div>
@@ -130,7 +136,8 @@ variables are treated as applicable so required values remain reviewable.</p>
 </ul></li>
 <li><p><code>operational</code></p><ul><li><p><code>incomplete_form_status</code></p></li>
 </ul></li>
-<li><p><code>consistency</code></p><ul><li><p><code>checkbox_none_with_other</code></p></li>
+<li><p><code>consistency</code></p><ul><li><p><code>checkbox_no_values_selected</code></p></li>
+<li><p><code>checkbox_none_with_other</code></p></li>
 </ul></li>
 </ul></div>
 
