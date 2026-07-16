@@ -67,8 +67,23 @@ test_that("build_quality_report validates scalar finite thresholds", {
   )
 })
 
-test_that("pull_redcap_project quiets REDCapR API messages", {
-  quiet_records <- function(redcap_uri, token, verbose, ...) {
+test_that("pull_redcap_project requests quiet raw REDCapR records", {
+  quiet_records <- function(
+    redcap_uri,
+    token,
+    raw_or_label,
+    raw_or_label_headers,
+    export_checkbox_label,
+    na,
+    guess_type,
+    verbose,
+    ...
+  ) {
+    expect_equal(raw_or_label, "raw")
+    expect_equal(raw_or_label_headers, "raw")
+    expect_false(export_checkbox_label)
+    expect_equal(na, "")
+    expect_false(guess_type)
     if (verbose) {
       message("records should be quiet")
     }
@@ -121,6 +136,53 @@ test_that("pull_redcap_project quiets REDCapR API messages", {
       "repeating_instruments"
     )
   )
+})
+
+test_that("API record import preserves raw choice codes as characters", {
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    redcap_read_oneshot = function(..., guess_type, na) {
+      captured <<- list(guess_type = guess_type, na = na)
+      choice_value <- if (guess_type) FALSE else "1"
+      list(
+        data = tibble::tibble(
+          record_id = "1",
+          choice_field = choice_value
+        )
+      )
+    },
+    redcap_metadata_read = function(...) {
+      list(
+        data = tibble::tibble(
+          field_name = c("record_id", "choice_field"),
+          form_name = "main",
+          field_type = c("text", "dropdown"),
+          field_label = c("Record ID", "Choice"),
+          select_choices_or_calculations = c(NA, "1, One | 2, Two")
+        )
+      )
+    },
+    redcap_event_read = function(...) list(data = tibble::tibble()),
+    redcap_event_instruments = function(...) list(data = tibble::tibble()),
+    redcap_instruments = function(...) list(data = tibble::tibble()),
+    redcap_instrument_repeating = function(...) list(data = tibble::tibble())
+  )
+
+  project <- pull_redcap_project(
+    redcap_uri = "https://redcap.example/api/",
+    token = "test-token"
+  )
+  report <- get_quality_report(
+    project = get_quality_project_data(project),
+    checks = "consistency",
+    sparse_threshold = 0.95,
+    outlier_iqr_multiplier = 3
+  )
+
+  expect_false(captured$guess_type)
+  expect_equal(captured$na, "")
+  expect_equal(project$data$choice_field, "1")
+  expect_equal(nrow(report$findings), 0)
 })
 
 test_that("pull_redcap_project reports optional and required API failures", {
@@ -286,7 +348,7 @@ test_that("build_quality_report returns expected findings and summaries for API 
   ))
 })
 
-test_that("API metadata checks report label, branching, and text risks", {
+test_that("API metadata checks report label, choice, and text risks", {
   redcap_data <- tibble::tibble(
     record_id = "1",
     field_a = "1",
@@ -313,8 +375,55 @@ test_that("API metadata checks report label, branching, and text risks", {
 
   expect_true("duplicate_field_label" %in% report$findings$issue)
   expect_true("missing_choice_definition" %in% report$findings$issue)
-  expect_true("orphaned_branching_reference" %in% report$findings$issue)
   expect_true("high_risk_free_text" %in% report$findings$issue)
+})
+
+test_that("API metadata checks do not report branching references", {
+  redcap_data <- tibble::tibble(
+    record_id = "1",
+    source_field = "1",
+    target_field = "present",
+    missing_reference = NA_character_,
+    event_reference = NA_character_,
+    smart_variable_reference = NA_character_,
+    main_complete = 2
+  )
+  metadata <- tibble::tibble(
+    field_name = c(
+      "record_id",
+      "source_field",
+      "target_field",
+      "missing_reference",
+      "event_reference",
+      "smart_variable_reference"
+    ),
+    form_name = c("main", "source_form", rep("target_form", 4)),
+    field_type = "text",
+    field_label = c(
+      "Record ID",
+      "Source Field",
+      "Target Field",
+      "Missing Reference",
+      "Event Reference",
+      "Smart Variable Reference"
+    ),
+    branching_logic = c(
+      NA,
+      NA,
+      "[source_field] = '1'",
+      "[not_in_metadata] = '1'",
+      "[baseline_arm_1][source_field] = '1'",
+      "[current-event-name] = 'baseline_arm_1'"
+    )
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    checks = "metadata"
+  )
+
+  expect_false("orphaned_branching_reference" %in% report$findings$issue)
 })
 
 test_that("API metadata aliases are standardized", {
@@ -413,6 +522,305 @@ test_that("API outlier checks ignore invalid date strings", {
     )
   )
   expect_false("future_date" %in% report$findings$issue)
+})
+
+test_that("REDCap text validation parsers enforce supported formats", {
+  examples <- tibble::tribble(
+    ~validation,
+    ~valid,
+    ~invalid,
+    "integer",
+    "-12",
+    "12.0",
+    "number",
+    "12.25",
+    "1e3",
+    "number_comma_decimal",
+    "12,25",
+    "12.25",
+    "number_1dp",
+    "12.3",
+    "12.34",
+    "number_2dp",
+    "12.34",
+    "12.345",
+    "number_3dp",
+    "12.345",
+    "12.3456",
+    "number_4dp",
+    "12.3456",
+    "12.34567",
+    "number_1dp_comma_decimal",
+    "12,3",
+    "12,34",
+    "number_2dp_comma_decimal",
+    "12,34",
+    "12,345",
+    "number_3dp_comma_decimal",
+    "12,345",
+    "12,3456",
+    "number_4dp_comma_decimal",
+    "12,3456",
+    "12,34567",
+    "date_dmy",
+    "2025-12-31",
+    "2025-02-30",
+    "date_mdy",
+    "2025-12-31",
+    "12-31-2025",
+    "date_ymd",
+    "2024-02-29",
+    "2025-02-29",
+    "datetime_dmy",
+    "2025-12-31 23:59",
+    "2025-12-31 23:60",
+    "datetime_mdy",
+    "2025-12-31 23:59",
+    "12-31-2025 23:59",
+    "datetime_ymd",
+    "2025-12-31 23:59",
+    "2025-12-31 24:00",
+    "datetime_seconds_dmy",
+    "2025-12-31 23:59:59",
+    "2025-12-31 23:59",
+    "datetime_seconds_mdy",
+    "2025-12-31 23:59:59",
+    "2025-12-31 23:60:00",
+    "datetime_seconds_ymd",
+    "2025-12-31 23:59:59",
+    "2025-13-31 23:59:59",
+    "time",
+    "23:59",
+    "24:00",
+    "time_hh_mm_ss",
+    "23:59:59",
+    "23:60:00",
+    "time_mm_ss",
+    "59:59",
+    "60:00",
+    "email",
+    "person@example.org",
+    "person@example",
+    "phone",
+    "(215) 555-1212",
+    "215-555-121",
+    "phone_australia",
+    "+61 412 345 678",
+    "+61 12 345"
+  )
+
+  expect_true(all(purrr::map2_lgl(
+    examples$valid,
+    examples$validation,
+    get_is_valid_validation_value
+  )))
+  expect_false(any(purrr::map2_lgl(
+    examples$invalid,
+    examples$validation,
+    get_is_valid_validation_value
+  )))
+  expect_true(all(get_is_valid_validation_value(
+    c(".850", "-.850"),
+    "number"
+  )))
+  expect_equal(
+    get_parsed_validation_values(c(".850", "-.850"), "number"),
+    c(0.85, -0.85)
+  )
+  expect_true(get_is_valid_validation_value(".850", "number_3dp"))
+  expect_true(get_is_valid_validation_value(",850", "number_3dp_comma_decimal"))
+  expect_false(any(get_is_valid_validation_value(c(".", "-."), "number")))
+  expect_equal(
+    get_validation_expected("date_mdy"),
+    "Valid REDCap date (YYYY-MM-DD)"
+  )
+  expect_equal(
+    get_validation_expected("datetime_seconds_dmy"),
+    "Valid REDCap datetime (YYYY-MM-DD HH:MM:SS)"
+  )
+})
+
+test_that("API number validation accepts decimals without a leading zero", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    score = c(".850", "-.850", "."),
+    main_complete = 2
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "score"),
+    form_name = "main",
+    field_type = "text",
+    field_label = c("Record ID", "Score"),
+    text_validation_type_or_show_slider_number = c(NA, "number")
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    checks = "consistency"
+  )
+
+  expect_equal(report$findings$issue, "invalid_validation_format")
+  expect_equal(report$findings$record_id, "3")
+  expect_equal(report$findings$value, ".")
+})
+
+test_that("API consistency enforces only configured text validations", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    validated_text = c("10", "10.5", ""),
+    unvalidated_text = c("anything", "10.5", ""),
+    unsupported_text = c("abc", "123", ""),
+    non_text = c("10", "10.5", ""),
+    main_complete = c(2, 0, NA)
+  )
+  metadata <- tibble::tibble(
+    field_name = c(
+      "record_id",
+      "validated_text",
+      "unvalidated_text",
+      "unsupported_text",
+      "non_text"
+    ),
+    form_name = "main",
+    field_type = c("text", "text", "text", "text", "notes"),
+    field_label = c(
+      "Record ID",
+      "Validated",
+      "Unvalidated",
+      "Unsupported",
+      "Non-text"
+    ),
+    text_validation_type_or_show_slider_number = c(
+      NA,
+      "integer",
+      NA,
+      "alpha_only",
+      "integer"
+    )
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    checks = "consistency"
+  )
+
+  expect_equal(report$findings$issue, "invalid_validation_format")
+  expect_equal(report$findings$record_id, "2")
+  expect_equal(report$findings$field_name, "validated_text")
+  expect_equal(report$findings$value, "10.5")
+})
+
+test_that("API validation bounds use configured type-aware metadata", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    score = c("4", "11", "invalid"),
+    comma_score = c("1,4", "2,6", "invalid"),
+    visit_date = c("2024-12-31", "2025-06-01", "invalid"),
+    visit_datetime = c(
+      "2025-01-01 08:59",
+      "2025-01-01 09:00",
+      "invalid"
+    ),
+    visit_time = c("18:01", "18:00", "invalid"),
+    main_complete = c(2, 0, NA)
+  )
+  metadata <- tibble::tibble(
+    field_name = c(
+      "record_id",
+      "score",
+      "comma_score",
+      "visit_date",
+      "visit_datetime",
+      "visit_time"
+    ),
+    form_name = "main",
+    field_type = "text",
+    field_label = c(
+      "Record ID",
+      "Score",
+      "Comma Score",
+      "Visit Date",
+      "Visit Datetime",
+      "Visit Time"
+    ),
+    text_validation_type_or_show_slider_number = c(
+      NA,
+      "integer",
+      "number_1dp_comma_decimal",
+      "date_ymd",
+      "datetime_ymd",
+      "time"
+    ),
+    text_validation_min = c(
+      NA,
+      "5",
+      "1,5",
+      "2025-01-01",
+      "2025-01-01 09:00",
+      NA
+    ),
+    text_validation_max = c(NA, "10", "2,5", NA, NA, "18:00")
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    checks = c("outliers", "consistency")
+  )
+  range_findings <- report$findings |>
+    dplyr::filter(.data$issue == "outside_validation_range")
+  format_findings <- report$findings |>
+    dplyr::filter(.data$issue == "invalid_validation_format")
+
+  expect_equal(nrow(range_findings), 7)
+  expect_setequal(range_findings$record_id, c("1", "2"))
+  expect_false(any(range_findings$record_id == "3"))
+  expect_setequal(
+    unique(range_findings$expected),
+    c(
+      "Between 5 and 10",
+      "Between 1,5 and 2,5",
+      "At least 2025-01-01",
+      "At least 2025-01-01 09:00",
+      "At most 18:00"
+    )
+  )
+  expect_equal(nrow(format_findings), 5)
+  expect_true(all(format_findings$record_id == "3"))
+})
+
+test_that("API malformed dates do not also produce future findings", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2"),
+    visit_date = c("2999-01-01", "2999-13-01"),
+    main_complete = c(2, 0)
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "visit_date"),
+    form_name = "main",
+    field_type = "text",
+    field_label = c("Record ID", "Visit Date"),
+    text_validation_type_or_show_slider_number = c(NA, "date_ymd")
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    checks = c("outliers", "consistency")
+  )
+
+  expect_equal(
+    report$findings$record_id[report$findings$issue == "future_date"],
+    "1"
+  )
+  expect_equal(
+    report$findings$record_id[
+      report$findings$issue == "invalid_validation_format"
+    ],
+    "2"
+  )
 })
 
 test_that("API reports drop descriptive text fields before analysis", {
@@ -600,6 +1008,112 @@ test_that("API checkbox consistency findings use REDCap checkbox columns", {
   expect_equal(report$findings$record_id, "1")
   expect_equal(report$findings$field_name, "symptoms")
   expect_equal(report$findings$value, "symptoms___none")
+})
+
+test_that("API consistency detects invalid non-checkbox choice values", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "2", "3"),
+    radio_field = c("1", "9", ""),
+    dropdown_field = c("a", "z", NA),
+    yesno_field = c("1", "2", "0"),
+    truefalse_field = c("0", "true", "1"),
+    checkbox_field___a = c(1, 2, 0),
+    checkbox_field___b = c(0, 0, 0),
+    checkbox_field___unknown = c(0, 1, 0),
+    undefined_field = c("1", "9", ""),
+    main_complete = c(2, 0, NA)
+  )
+  metadata <- tibble::tibble(
+    field_name = c(
+      "record_id",
+      "radio_field",
+      "dropdown_field",
+      "yesno_field",
+      "truefalse_field",
+      "checkbox_field",
+      "undefined_field"
+    ),
+    form_name = "main",
+    field_type = c(
+      "text",
+      "radio",
+      "dropdown",
+      "yesno",
+      "truefalse",
+      "checkbox",
+      "radio"
+    ),
+    field_label = c(
+      "Record ID",
+      "Radio",
+      "Dropdown",
+      "Yes/No",
+      "True/False",
+      "Checkbox",
+      "Undefined"
+    ),
+    select_choices_or_calculations = c(
+      NA,
+      "1, One | 2, Two",
+      "a, A | b, B",
+      NA,
+      NA,
+      "A, A | B, B",
+      NA
+    )
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    checks = "consistency"
+  )
+  findings <- report$findings |>
+    dplyr::filter(.data$issue == "invalid_choice_value")
+
+  expect_equal(nrow(findings), 4)
+  expect_true(all(findings$record_id == "2"))
+  expect_setequal(
+    findings$field_name,
+    c(
+      "radio_field",
+      "dropdown_field",
+      "yesno_field",
+      "truefalse_field"
+    )
+  )
+  expect_false("checkbox_field" %in% findings$field_name)
+  expect_false("undefined_field" %in% findings$field_name)
+})
+
+test_that("API invalid choices include applicable repeating context", {
+  redcap_data <- tibble::tibble(
+    record_id = c("1", "1", "1"),
+    redcap_event_name = "event_1_arm_1",
+    redcap_repeat_instrument = c(NA, "repeat_form", "other_form"),
+    redcap_repeat_instance = c(NA, 1, 1),
+    repeat_choice = c(NA, "9", "9"),
+    repeat_form_complete = c(NA, 0, NA)
+  )
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "repeat_choice"),
+    form_name = c("main", "repeat_form"),
+    field_type = c("text", "radio"),
+    field_label = c("Record ID", "Repeat Choice"),
+    select_choices_or_calculations = c(NA, "1, One | 2, Two")
+  )
+
+  report <- build_mock_quality_report(
+    redcap_data,
+    metadata,
+    repeating_instruments = tibble::tibble(form_name = "repeat_form"),
+    checks = "consistency"
+  )
+
+  expect_equal(report$findings$issue, "invalid_choice_value")
+  expect_equal(report$findings$event_name, "event_1_arm_1")
+  expect_equal(report$findings$repeat_instrument, "repeat_form")
+  expect_equal(report$findings$repeat_instance, "1")
 })
 
 test_that("API checkbox consistency reports fields with no selected options", {

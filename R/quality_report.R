@@ -31,7 +31,6 @@
 #'   - `duplicate_field_label`
 #'   - `missing_field_label`
 #'   - `missing_choice_definition`
-#'   - `orphaned_branching_reference`
 #'   - `high_risk_free_text`
 #' - `outliers`
 #'   - `outside_validation_range`
@@ -40,8 +39,26 @@
 #' - `operational`
 #'   - `incomplete_form_status`
 #' - `consistency`
+#'   - `invalid_choice_value`
+#'   - `invalid_validation_format`
 #'   - `checkbox_no_values_selected`
 #'   - `checkbox_none_with_other`
+#'
+#' `invalid_validation_format` is evaluated only for text fields with a
+#' supported validation configured in
+#' `text_validation_type_or_show_slider_number`. Supported validations include
+#' REDCap integer and number formats, dates and datetimes, times, email
+#' addresses, and North American and Australian phone numbers. Number formats
+#' accept decimal values with or without a leading zero. Date and datetime
+#' values are validated in REDCap's canonical API export formats, regardless of
+#' their configured data-entry display order.
+#' `outside_validation_range` enforces the optional `text_validation_min` and
+#' `text_validation_max` bounds using the configured validation type.
+#' Unvalidated text fields and unsupported validation types are not assessed.
+#' `invalid_choice_value` applies to radio, dropdown, Yes/No, and True/False
+#' fields; checkbox fields retain their dedicated consistency checks. Choice
+#' and text validation checks use structurally applicable form, event, and
+#' repeat rows regardless of form completion status or branching logic.
 #'
 #' @returns A list with `findings`, `summaries`, and `metadata` elements.
 #'   `findings` includes record, form, event, repeat instrument, and repeat
@@ -151,6 +168,11 @@ get_quality_report <- function(
     "Normalized input"
   )
 
+  project$represented_fields <- get_represented_fields(project)
+  project$form_applicability <- get_form_applicability(project)
+  project$validation_cache <- new.env(parent = emptyenv())
+  project$field_value_cache <- new.env(parent = emptyenv())
+  project$choices <- get_choice_rows(project$metadata)
   project$field_applicability <- get_field_applicability(project)
   update_report_progress(
     progress_bar,
@@ -258,7 +280,9 @@ get_quality_report <- function(
 #' @returns A list containing raw records, metadata, events, event-instrument
 #'   mapping, instruments, and repeating instrument configuration.
 #'   Errors from any structural metadata endpoint are reported rather than
-#'   converted into empty project structure.
+#'   converted into empty project structure. Records and headers use raw REDCap
+#'   codes with automatic type guessing disabled, and checkbox choices are
+#'   returned as raw `0`/`1` values. Only empty strings are imported as missing.
 #'
 #' @export
 pull_redcap_project <- function(redcap_uri, token) {
@@ -267,6 +291,11 @@ pull_redcap_project <- function(redcap_uri, token) {
   data_result <- redcap_read_oneshot(
     redcap_uri = redcap_uri,
     token = token,
+    raw_or_label = "raw",
+    raw_or_label_headers = "raw",
+    export_checkbox_label = FALSE,
+    na = "",
+    guess_type = FALSE,
     verbose = FALSE
   )
   metadata_result <- redcap_metadata_read(
@@ -701,9 +730,7 @@ get_field_summary <- function(project) {
   }
 
   bind_rows(map(fields, \(field) {
-    metadata_row <- project$metadata |>
-      filter(.data$field_name == field) |>
-      slice(1)
+    metadata_row <- get_metadata_row(project, field)
     field_rows <- get_field_applicable_rows(project, field)
     value <- get_field_values(project, field)[field_rows]
     missing <- get_is_missing(value)
@@ -757,9 +784,11 @@ get_field_applicability <- function(project) {
 
   setNames(
     map(fields, \(field) {
-      metadata_row <- field_metadata |>
-        filter(.data$field_name == field) |>
-        slice(1)
+      metadata_row <- field_metadata[
+        match(field, field_metadata$field_name),
+        names(field_metadata),
+        drop = FALSE
+      ]
       logic_key <- as.character(metadata_row$branching_logic)
       if (get_is_missing(logic_key)) {
         logic_key <- "__missing_branching_logic__"
@@ -779,18 +808,26 @@ get_field_applicability <- function(project) {
 }
 
 get_represented_fields <- function(project) {
-  project$metadata$field_name[
-    map_lgl(project$metadata$field_name, \(field) {
-      field %in%
-        names(project$data) ||
-        any(startsWith(names(project$data), paste0(field, "___")))
-    })
-  ]
+  if ("represented_fields" %in% names(project)) {
+    return(project$represented_fields)
+  }
+
+  checkbox_fields <- sub(
+    "___.*$",
+    "",
+    names(project$data)[str_detect(names(project$data), "___")]
+  )
+  represented <- unique(c(names(project$data), checkbox_fields))
+  project$metadata$field_name[project$metadata$field_name %in% represented]
 }
 
 get_field_values <- function(project, field) {
   if (field %in% names(project$data)) {
     return(project$data[[field]])
+  }
+
+  if ("field_value_cache" %in% names(project) && exists(field, envir = project$field_value_cache, inherits = FALSE)) {
+    return(project$field_value_cache[[field]])
   }
 
   checkbox_columns <- names(project$data)[startsWith(
@@ -801,26 +838,57 @@ get_field_values <- function(project, field) {
     return(rep(NA_character_, nrow(project$data)))
   }
 
-  checkbox_data <- project$data[checkbox_columns]
-  checked <- as.data.frame(map(checkbox_data, get_is_checked))
-  missing <- as.data.frame(map(checkbox_data, get_is_missing))
+  checked <- vapply(
+    project$data[checkbox_columns],
+    get_is_checked,
+    logical(nrow(project$data))
+  )
+  missing <- vapply(
+    project$data[checkbox_columns],
+    get_is_missing,
+    logical(nrow(project$data))
+  )
+  checked <- matrix(
+    checked,
+    nrow = nrow(project$data),
+    ncol = length(checkbox_columns)
+  )
+  missing <- matrix(
+    missing,
+    nrow = nrow(project$data),
+    ncol = length(checkbox_columns)
+  )
+
   checked_names <- sub(paste0("^", field, "___"), "", checkbox_columns)
-  map_chr(seq_len(nrow(checked)), \(row) {
-    row_checked <- unlist(checked[row, ], use.names = FALSE)
-    row_missing <- unlist(missing[row, ], use.names = FALSE)
-    if (all(row_missing)) {
-      return(NA_character_)
-    }
+  all_missing <- rowSums(missing) == ncol(missing)
+  selected <- !all_missing & rowSums(checked) > 0
+  out <- rep("No selections", nrow(project$data))
+  out[all_missing] <- NA_character_
 
-    if (!any(row_checked, na.rm = TRUE)) {
-      return("No selections")
-    }
+  if (any(selected)) {
+    keys <- do.call(
+      paste0,
+      unname(as.data.frame(checked[selected, , drop = FALSE] + 0L))
+    )
+    unique_keys <- unique(keys)
+    first_rows <- which(selected)[match(unique_keys, keys)]
+    labels <- map_chr(first_rows, \(row) {
+      paste(checked_names[checked[row, ]], collapse = ", ")
+    })
+    out[selected] <- labels[match(keys, unique_keys)]
+  }
 
-    paste(checked_names[row_checked], collapse = ", ")
-  })
+  if ("field_value_cache" %in% names(project)) {
+    project$field_value_cache[[field]] <- out
+  }
+  out
 }
 
 get_form_applicable_rows <- function(project, form_name) {
+  if ("form_applicability" %in% names(project) && form_name %in% names(project$form_applicability)) {
+    return(project$form_applicability[[form_name]])
+  }
+
   repeated_rows <- get_repeating_instrument_rows(project)
   matching_repeat_rows <- get_matching_repeat_rows(project, form_name)
   nonrepeat_rows <- !repeated_rows
@@ -831,14 +899,16 @@ get_form_applicable_rows <- function(project, form_name) {
       get_form_available_rows(project, form_name))
 }
 
-get_missingness_form_applicable_rows <- function(project, form_name) {
-  repeated_rows <- get_repeating_instrument_rows(project)
-  matching_repeat_rows <- get_matching_repeat_rows(project, form_name)
-  nonrepeat_rows <- !repeated_rows
+get_form_applicability <- function(project) {
+  forms <- unique(project$metadata$form_name)
+  setNames(
+    map(forms, \(form_name) get_form_applicable_rows(project, form_name)),
+    forms
+  )
+}
 
-  (matching_repeat_rows |
-    (nonrepeat_rows &
-      get_event_form_enabled_rows(project, form_name))) &
+get_missingness_form_applicable_rows <- function(project, form_name) {
+  get_form_applicable_rows(project, form_name) &
     get_form_completion_assessed_rows(project$data, form_name)
 }
 
@@ -1048,46 +1118,14 @@ get_metadata_findings <- function(project) {
       )
     )
 
-  branch_orphans <- get_branching_orphans(metadata)
   high_risk_text <- get_high_risk_text_findings(metadata)
 
   bind_rows(
     duplicate_labels,
     missing_labels,
     malformed_choices,
-    branch_orphans,
     high_risk_text
   )
-}
-
-get_branching_orphans <- function(metadata) {
-  fields <- metadata$field_name
-  bind_rows(map(seq_len(nrow(metadata)), \(index) {
-    logic <- metadata$branching_logic[[index]]
-    refs <- get_branching_references(logic)
-    missing_refs <- setdiff(refs, fields)
-
-    if (length(missing_refs) == 0) {
-      return(get_empty_findings())
-    }
-
-    tibble(
-      check = "metadata",
-      issue = "orphaned_branching_reference",
-      severity = "warning",
-      scope = "field",
-      record_id = NA_character_,
-      form_name = metadata$form_name[[index]],
-      event_name = NA_character_,
-      field_name = metadata$field_name[[index]],
-      value = paste(missing_refs, collapse = ", "),
-      expected = "Branching references present in metadata",
-      message = paste(
-        "Branching logic references missing field(s):",
-        paste(missing_refs, collapse = ", ")
-      )
-    )
-  }))
 }
 
 get_high_risk_text_findings <- function(metadata) {
@@ -1135,27 +1173,47 @@ get_outlier_findings <- function(project, outlier_iqr_multiplier) {
 get_range_findings <- function(project) {
   metadata <- project$metadata |>
     filter(
+      tolower(.data$field_type) == "text",
       .data$field_name %in% names(project$data),
+      tolower(.data$text_validation_type_or_show_slider_number) %in%
+        get_bounded_text_validations(),
       !get_is_missing(.data$text_validation_min) |
         !get_is_missing(.data$text_validation_max)
     )
 
   bind_rows(map(seq_len(nrow(metadata)), \(index) {
     field <- metadata$field_name[[index]]
-    value <- suppressWarnings(as.numeric(project$data[[field]]))
-    min_value <- suppressWarnings(as.numeric(metadata$text_validation_min[[
-      index
-    ]]))
-    max_value <- suppressWarnings(as.numeric(metadata$text_validation_max[[
-      index
-    ]]))
-    low <- !is.na(value) & !is.na(min_value) & value < min_value
-    high <- !is.na(value) & !is.na(max_value) & value > max_value
+    validation <- tolower(
+      metadata$text_validation_type_or_show_slider_number[[index]]
+    )
+    value <- get_cached_validation_values(project, field, validation)
+    min_text <- as.character(metadata$text_validation_min[[index]])
+    max_text <- as.character(metadata$text_validation_max[[index]])
+    min_value <- get_parsed_validation_values(min_text, validation)
+    max_value <- get_parsed_validation_values(max_text, validation)
+    applicable <- get_form_applicable_rows(
+      project,
+      metadata$form_name[[index]]
+    )
+    low <- applicable & !is.na(value) & !is.na(min_value) & value < min_value
+    high <- applicable & !is.na(value) & !is.na(max_value) & value > max_value
     bad <- low | high
 
     if (!any(bad)) {
       return(get_empty_findings())
     }
+
+    expected <- case_when(
+      !get_is_missing(min_text) && !get_is_missing(max_text) ~
+        paste(
+          "Between",
+          min_text,
+          "and",
+          max_text
+        ),
+      !get_is_missing(min_text) ~ paste("At least", min_text),
+      TRUE ~ paste("At most", max_text)
+    )
 
     tibble(
       check = "outliers",
@@ -1169,7 +1227,7 @@ get_range_findings <- function(project) {
       repeat_instance = get_repeat_instance_values(project$data, bad),
       field_name = field,
       value = as.character(project$data[[field]][bad]),
-      expected = paste("Between", min_value, "and", max_value),
+      expected = expected,
       message = paste("Field", field, "is outside the REDCap validation range.")
     )
   }))
@@ -1187,7 +1245,15 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
       return(get_empty_findings())
     }
 
-    values <- suppressWarnings(as.numeric(project$data[[field]]))
+    metadata_row <- get_metadata_row(project, field)
+    validation <- tolower(
+      metadata_row$text_validation_type_or_show_slider_number
+    )
+    values <- if (validation %in% get_supported_text_validations() && get_validation_family(validation) == "number") {
+      get_cached_validation_values(project, field, validation)
+    } else {
+      suppressWarnings(as.numeric(project$data[[field]]))
+    }
     observed <- values[!is.na(values)]
     if (length(observed) < 4 || IQR(observed) == 0) {
       return(get_empty_findings())
@@ -1203,7 +1269,6 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
       return(get_empty_findings())
     }
 
-    metadata_row <- get_metadata_row(project, field)
     tibble(
       check = "outliers",
       issue = "numeric_iqr_outlier",
@@ -1227,20 +1292,30 @@ get_iqr_outlier_findings <- function(project, outlier_iqr_multiplier) {
 get_future_date_findings <- function(project, today = Sys.Date()) {
   date_fields <- project$metadata |>
     filter(
+      tolower(.data$field_type) == "text",
       .data$field_name %in% names(project$data),
-      str_detect(
-        tolower(.data$text_validation_type_or_show_slider_number),
-        "date"
-      )
+      tolower(.data$text_validation_type_or_show_slider_number) %in%
+        get_supported_text_validations(),
+      get_validation_family(
+        tolower(.data$text_validation_type_or_show_slider_number)
+      ) %in%
+        c("date", "datetime")
     )
 
   bind_rows(map(seq_len(nrow(date_fields)), \(index) {
     field <- date_fields$field_name[[index]]
-    value <- as.Date(
-      as.character(project$data[[field]]),
-      format = "%Y-%m-%d"
+    validation <- tolower(
+      date_fields$text_validation_type_or_show_slider_number[[index]]
     )
-    future <- !is.na(value) & value > today
+    value <- get_validation_dates_from_parsed(
+      get_cached_validation_values(project, field, validation),
+      validation
+    )
+    applicable <- get_form_applicable_rows(
+      project,
+      date_fields$form_name[[index]]
+    )
+    future <- applicable & !is.na(value) & value > today
 
     if (!any(future)) {
       return(get_empty_findings())
@@ -1356,7 +1431,15 @@ get_empty_completion_status <- function() {
 }
 
 get_consistency_findings <- function(project) {
-  choices <- get_choice_rows(project$metadata)
+  bind_rows(
+    get_invalid_choice_findings(project),
+    get_invalid_validation_findings(project),
+    get_checkbox_consistency_findings(project)
+  )
+}
+
+get_checkbox_consistency_findings <- function(project) {
+  choices <- get_project_choice_rows(project)
   checkbox_groups <- split(
     names(project$data)[str_detect(names(project$data), "___")],
     sub(
@@ -1636,7 +1719,7 @@ get_form_metadata <- function(project) {
 }
 
 get_choice_metadata <- function(project) {
-  get_choice_rows(project$metadata) |>
+  get_project_choice_rows(project) |>
     select("field_name", "form_name", "choice_value", "choice_label")
 }
 
@@ -1694,11 +1777,9 @@ get_optional_redcapr_data <- function(fun, redcap_uri, token, label) {
 }
 
 get_metadata_row <- function(project, field) {
-  row <- project$metadata |>
-    filter(.data$field_name == field) |>
-    slice(1)
+  index <- match(field, project$metadata$field_name)
 
-  if (nrow(row) == 0) {
+  if (is.na(index)) {
     return(tibble(
       field_name = field,
       form_name = NA_character_,
@@ -1707,7 +1788,7 @@ get_metadata_row <- function(project, field) {
     ))
   }
 
-  row
+  project$metadata[index, , drop = FALSE]
 }
 
 get_is_missing <- function(x) {
@@ -1870,8 +1951,18 @@ get_is_numeric_field <- function(project, field) {
     return(FALSE)
   }
 
+  observed <- as.character(value[!get_is_missing(value)])
+  values_are_numeric <- length(observed) > 0 &&
+    all(
+      !is.na(
+        suppressWarnings(as.numeric(observed))
+      )
+    )
+
   is.numeric(value) ||
-    validation %in% c("integer", "number", "float", "number_1dp", "number_2dp")
+    values_are_numeric ||
+    validation %in% "float" ||
+    (validation %in% get_supported_text_validations() && get_validation_family(validation) == "number")
 }
 
 get_branching_references <- function(logic) {

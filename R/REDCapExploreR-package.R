@@ -9,7 +9,7 @@
 #' @importFrom ggplot2 aes element_blank element_text geom_tile ggplot labs
 #' scale_fill_gradientn scale_x_discrete scale_y_discrete theme theme_minimal
 #' @importFrom htmltools browsable htmlDependency tagList tags
-#' @importFrom purrr flatten_chr map map_chr map_lgl
+#' @importFrom purrr flatten_chr map map_chr map_dbl map_lgl
 #' @importFrom REDCapR redcap_arm_export redcap_event_instruments
 #' redcap_instruments redcap_event_read redcap_instrument_repeating
 #' redcap_metadata_read redcap_project_info_read redcap_read_oneshot
