@@ -127,7 +127,6 @@ variables are treated as applicable so required values remain reviewable.</p>
 <li><p><code>metadata</code></p><ul><li><p><code>duplicate_field_label</code></p></li>
 <li><p><code>missing_field_label</code></p></li>
 <li><p><code>missing_choice_definition</code></p></li>
-<li><p><code>orphaned_branching_reference</code></p></li>
 <li><p><code>high_risk_free_text</code></p></li>
 </ul></li>
 <li><p><code>outliers</code></p><ul><li><p><code>outside_validation_range</code></p></li>
@@ -136,10 +135,27 @@ variables are treated as applicable so required values remain reviewable.</p>
 </ul></li>
 <li><p><code>operational</code></p><ul><li><p><code>incomplete_form_status</code></p></li>
 </ul></li>
-<li><p><code>consistency</code></p><ul><li><p><code>checkbox_no_values_selected</code></p></li>
+<li><p><code>consistency</code></p><ul><li><p><code>invalid_choice_value</code></p></li>
+<li><p><code>invalid_validation_format</code></p></li>
+<li><p><code>checkbox_no_values_selected</code></p></li>
 <li><p><code>checkbox_none_with_other</code></p></li>
 </ul></li>
-</ul></div>
+</ul><p><code>invalid_validation_format</code> is evaluated only for text fields with a
+supported validation configured in
+<code>text_validation_type_or_show_slider_number</code>. Supported validations include
+REDCap integer and number formats, dates and datetimes, times, email
+addresses, and North American and Australian phone numbers. Number formats
+accept decimal values with or without a leading zero. Date and datetime
+values are validated in REDCap's canonical API export formats, regardless of
+their configured data-entry display order.
+<code>outside_validation_range</code> enforces the optional <code>text_validation_min</code> and
+<code>text_validation_max</code> bounds using the configured validation type.
+Unvalidated text fields and unsupported validation types are not assessed.
+<code>invalid_choice_value</code> applies to radio, dropdown, Yes/No, and True/False
+fields; checkbox fields retain their dedicated consistency checks. Choice
+and text validation checks use structurally applicable form, event, and
+repeat rows regardless of form completion status or branching logic.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

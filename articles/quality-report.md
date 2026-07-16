@@ -320,6 +320,84 @@ a checkbox field, the report produces one field-level
 confirm that the no-selection state is intentional, not a missingness
 finding.
 
+## Metadata-Defined Validation
+
+Choice and text validation findings compare exported raw values with
+rules configured in REDCap metadata. Unlike missingness, these checks
+inspect nonblank values on structurally applicable rows regardless of
+whether a form is Incomplete, Unverified, or Complete. Event-to-form and
+repeating-instrument mappings are respected. Branching logic does not
+suppress these findings: a stored nonblank value that violates its
+metadata remains reviewable even when the field is currently hidden.
+
+The records pull disables automatic column type guessing so raw choice
+codes such as `0` and `1` remain character values rather than being
+converted to logical `FALSE` and `TRUE`. Only empty CSV values are
+imported as missing; literal codes such as `"NA"` are preserved for
+comparison with metadata.
+
+### Choice values
+
+`invalid_choice_value` identifies raw codes that are not among a field’s
+metadata choices for radio, dropdown, Yes/No, and True/False fields.
+Yes/No and True/False use their implicit REDCap `0`/`1` definitions.
+
+Checkbox fields are not assessed by `invalid_choice_value`. Their
+metadata codes identify the separate exported option columns, while each
+option column contains a `0` or `1` selection state. Checkbox review
+remains available through `checkbox_no_values_selected` and
+`checkbox_none_with_other`.
+
+Fields without an explicit radio, dropdown, or checkbox definition
+cannot be compared with allowed codes. They produce
+`missing_choice_definition` under the metadata check instead of an
+invalid-choice finding.
+
+### Text validation formats and bounds
+
+`invalid_validation_format` applies only when all of the following are
+true:
+
+1.  The metadata `field_type` is `text`.
+2.  `text_validation_type_or_show_slider_number` contains a supported
+    REDCap validation type.
+3.  The exported value is nonblank on a structurally applicable row.
+
+The report does not infer validation from an R column class, field name,
+question text, or observed values. Text fields without configured
+validation and unsupported validation types are not assessed.
+
+Supported metadata validation families are:
+
+- `integer`; `number`; decimal-place variants from `number_1dp` through
+  `number_4dp`; and their `*_comma_decimal` variants.
+- `date_dmy`, `date_mdy`, and `date_ymd`.
+- DMY, MDY, and YMD `datetime_*` types, with or without seconds.
+- `time`, `time_hh_mm_ss`, and `time_mm_ss`.
+- `email`, `phone`, and `phone_australia`.
+
+The DMY, MDY, and YMD suffix controls REDCap’s data-entry display, but
+REDCap exports stored date and datetime values through the API in
+canonical YMD order. The report therefore validates all date types as
+`YYYY-MM-DD` and datetime types as `YYYY-MM-DD HH:MM` or
+`YYYY-MM-DD HH:MM:SS`, depending on whether the validation includes
+seconds.
+
+Parsing remains strict for impossible calendar or clock values, decimal
+separators, configured decimal precision, and scientific notation.
+REDCap number validations accept decimal values with or without a
+leading zero, such as `0.850` and `.850`. Email checks assess structure
+rather than deliverability. Phone checks allow common punctuation and
+assess North American or Australian digit structure; they do not verify
+that a number is assigned.
+
+When supplied, `text_validation_min` and `text_validation_max` produce
+`outside_validation_range` findings for validly formatted numeric, date,
+datetime, and time values outside those user-configured bounds. Either
+bound can be used alone. A malformed value produces
+`invalid_validation_format` and is excluded from range and future-date
+checks to avoid duplicate or misleading findings.
+
 ## Quality Report Structure
 
 ### Findings
@@ -353,12 +431,13 @@ The following checks are currently performed.
 | Metadata | `duplicate_field_label` | The same nonblank field label is used by multiple field names. | Info, field |
 | Metadata | `missing_field_label` | A field has no label. | Info, field |
 | Metadata | `missing_choice_definition` | A radio, dropdown, or checkbox field has no explicit choice definition. | Warning, field |
-| Metadata | `orphaned_branching_reference` | Branching logic references a field not present in project metadata. | Warning, field |
 | Metadata | `high_risk_free_text` | A text or notes field name or label contains terms associated with notes, comments, other details, or similar free text. | Info, field |
-| Outliers | `outside_validation_range` | A numeric value is below or above a REDCap metadata validation bound. | Warning, `record_field` |
+| Outliers | `outside_validation_range` | A validly formatted numeric, date, datetime, or time value is outside `text_validation_min` or `text_validation_max`. | Warning, `record_field` |
 | Outliers | `numeric_iqr_outlier` | A numeric, non-choice field falls outside the configured IQR heuristic. At least four observed values and a nonzero IQR are required. | Info, `record_field` |
-| Outliers | `future_date` | A field with date validation contains a `YYYY-MM-DD` value after the report date. | Info, `record_field` |
+| Outliers | `future_date` | A validly formatted date or datetime value occurs after the report date. | Info, `record_field` |
 | Operational | `incomplete_form_status` | An applicable form status is missing or is not Complete. | Info, `record_field` |
+| Consistency | `invalid_choice_value` | A raw radio, dropdown, Yes/No, or True/False code is absent from metadata choices. | Warning, `record_field` |
+| Consistency | `invalid_validation_format` | A text value does not satisfy its configured `text_validation_type_or_show_slider_number` rule. | Warning, `record_field` |
 | Consistency | `checkbox_no_values_selected` | No options are selected for a checkbox field across applicable Unverified or Complete forms. | Info, field |
 | Consistency | `checkbox_none_with_other` | A checkbox option labeled None, No, Not applicable, N/A, NA, or None of the above is selected with another option. | Warning, `record_field` |
 
@@ -556,21 +635,22 @@ expression that evaluates to `NA` is treated as not shown for that row.
 
 REDCap functions, smart variables, and other expressions outside the
 supported subset are treated as applicable rather than used to hide a
-potentially required value. The metadata check separately reports
-references to fields that are absent from project metadata. Complex
-branching findings should therefore be reviewed against REDCap itself.
+potentially required value. The report does not produce findings for
+apparently missing branching references because event-qualified fields,
+cross-form fields, and smart variables cannot be classified reliably
+from bracketed tokens alone.
 
-### Outlier checks depend on metadata and sample size
+### Validation and outlier checks have different sources
 
-Validation-range findings depend on numeric minimum and maximum values
-defined in REDCap metadata. IQR findings are distribution-based and
-require at least four observed values and a nonzero IQR. Their
-usefulness depends on the field’s distribution and the selected
-multiplier.
+Format and range findings enforce user-created `text_validation_*`
+metadata for text fields. The validation type determines how values and
+optional bounds are parsed. Unsupported or absent validation types do
+not produce format findings, and malformed values are not reported as
+range or future-date findings.
 
-Future-date checks apply only to fields whose REDCap validation type
-contains `date`, and values are interpreted in `YYYY-MM-DD` form.
-Invalid date strings are not reported as future dates.
+IQR findings are separate distribution-based heuristics. They require at
+least four observed values and a nonzero IQR, and their usefulness
+depends on the field’s distribution and selected multiplier.
 
 ### Counts reflect REDCap’s row structure
 

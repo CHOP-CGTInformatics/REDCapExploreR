@@ -63,7 +63,9 @@
     <p>A list containing raw records, metadata, events, event-instrument
 mapping, instruments, and repeating instrument configuration.
 Errors from any structural metadata endpoint are reported rather than
-converted into empty project structure.</p>
+converted into empty project structure. Records and headers use raw REDCap
+codes with automatic type guessing disabled, and checkbox choices are
+returned as raw <code>0</code>/<code>1</code> values. Only empty strings are imported as missing.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
