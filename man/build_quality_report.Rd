@@ -75,7 +75,6 @@ Current \code{findings$issue} values by \code{findings$check}:
 \item \code{duplicate_field_label}
 \item \code{missing_field_label}
 \item \code{missing_choice_definition}
-\item \code{orphaned_branching_reference}
 \item \code{high_risk_free_text}
 }
 \item \code{outliers}
@@ -90,10 +89,28 @@ Current \code{findings$issue} values by \code{findings$check}:
 }
 \item \code{consistency}
 \itemize{
+\item \code{invalid_choice_value}
+\item \code{invalid_validation_format}
 \item \code{checkbox_no_values_selected}
 \item \code{checkbox_none_with_other}
 }
 }
+
+\code{invalid_validation_format} is evaluated only for text fields with a
+supported validation configured in
+\code{text_validation_type_or_show_slider_number}. Supported validations include
+REDCap integer and number formats, dates and datetimes, times, email
+addresses, and North American and Australian phone numbers. Number formats
+accept decimal values with or without a leading zero. Date and datetime
+values are validated in REDCap's canonical API export formats, regardless of
+their configured data-entry display order.
+\code{outside_validation_range} enforces the optional \code{text_validation_min} and
+\code{text_validation_max} bounds using the configured validation type.
+Unvalidated text fields and unsupported validation types are not assessed.
+\code{invalid_choice_value} applies to radio, dropdown, Yes/No, and True/False
+fields; checkbox fields retain their dedicated consistency checks. Choice
+and text validation checks use structurally applicable form, event, and
+repeat rows regardless of form completion status or branching logic.
 }
 \examples{
 \dontrun{
