@@ -14,49 +14,87 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
+```{r setup, include = FALSE}
 library(REDCapExploreR)
 ```
 
 REDCapExploreR provides exploratory tools for REDCap projects accessed through
-the REDCap API. The package focuses on project structure, record status
-summaries, codebook review, and general data quality checks that help data
-managers inspect REDCap data in R.
+the REDCap API. Use it to inspect project structure, review form completion,
+and identify general data quality findings without modifying the REDCap
+project.
 
 ## Installation
 
-Install the development version from GitHub:
+Install the development version from GitHub and load the package:
 
 ```{r install, eval=FALSE}
 devtools::install_github("CHOP-CGTInformatics/REDCapExploreR")
-```
-
-Load the package after installation:
-
-```{r load-package}
 library(REDCapExploreR)
 ```
 
 ## REDCap API credentials
 
-Most REDCapExploreR workflows need a REDCap API endpoint and an API token with
-access to the project being reviewed. A common setup is to store these values in
-environment variables and read them at the start of the analysis:
+Functions that retrieve a REDCap project need an API endpoint and a project
+token with appropriate API permissions. Store credentials outside
+version-controlled code, such as in environment variables:
 
 ```{r credentials, eval=FALSE}
 redcap_uri <- Sys.getenv("REDCAP_URI")
 token <- Sys.getenv("REDCAP_TOKEN")
 ```
 
-The examples below assume `redcap_uri` and `token` have been set. Avoid storing
-API tokens directly in scripts, vignettes, or version-controlled files.
+The examples below assume `redcap_uri` and `token` are set. The package also
+includes synthetic objects for credential-free exploration.
 
-## Record Status Dashboard
+## Choose a workflow
 
-Use `build_record_status_data()` to retrieve a plotting-friendly table that
-summarizes REDCap form completion status by record. Then pass the result to
-`plot_record_status()` to create a ggplot heat map similar to the REDCap Record
-Status Dashboard.
+The primary workflows are independent. Start with the function that matches
+your review goal.
+
+| Goal | Start with |
+|---|---|
+| Understand project fields and structure | `build_codebook()` |
+| Review form completion | `build_record_status_data()` |
+| Review data quality findings | `build_quality_report()` |
+| Analyze the underlying API tables directly | `pull_redcap_project()` |
+
+## Codebook
+
+`build_codebook()` returns a structured view of project fields, choices, forms,
+events, repeating configuration, and project-level metadata.
+
+```{r codebook-api, eval=FALSE}
+codebook <- build_codebook(
+  redcap_uri = redcap_uri,
+  token = token
+)
+
+codebook
+codebook$fields
+```
+
+Use `mock_codebook` to inspect the same output structure without API
+credentials.
+
+```{r codebook-mock}
+mock_codebook
+head(mock_codebook$fields)
+```
+
+`view_codebook()` presents each available section as an interactive HTML table:
+
+```{r view-codebook, eval=FALSE}
+view_codebook(codebook)
+```
+
+See the [`build_codebook()` reference](../reference/build_codebook.html) for
+output details and the available viewing options.
+
+## Record status dashboard
+
+`build_record_status_data()` summarizes REDCap form completion by record.
+`plot_record_status()` converts that table into a ggplot heat map similar to the
+REDCap Record Status Dashboard.
 
 ```{r record-status-api, eval=FALSE}
 status_data <- build_record_status_data(
@@ -67,79 +105,19 @@ status_data <- build_record_status_data(
 plot_record_status(status_data)
 ```
 
-The package includes a small synthetic dataset for examples and offline
-exploration. `mock_record_status_data` is generated from `mock_redcap_project`
-using the same internal record-status logic that supports
-`build_record_status_data()`.
+The synthetic `mock_record_status_data` can be plotted directly:
 
 ```{r record-status-mock, fig.alt="Synthetic REDCap record status dashboard heat map."}
-mock_record_status_data
-
 plot_record_status(mock_record_status_data)
 ```
 
-For larger projects, compact mode reduces x-axis text size, truncates long form
-labels, and uses lighter tile borders.
+See the [`plot_record_status()` reference](../reference/plot_record_status.html)
+for compact mode and display customization.
 
-```{r record-status-compact, fig.alt="Compact synthetic REDCap record status dashboard heat map.", eval=FALSE}
-plot_record_status(mock_record_status_data, mode = "compact")
+## Quality report
 
-plot_record_status(
-  mock_record_status_data,
-  mode = "compact",
-  form_label_max = 20
-)
-```
-
-Because `plot_record_status()` returns a ggplot object, you can add ggplot2
-layers to customize labels and display settings.
-
-```{r record-status-custom, fig.alt="Synthetic REDCap record status dashboard heat map with a custom title."}
-plot_record_status(mock_record_status_data) +
-  ggplot2::labs(title = "REDCap Record Status")
-```
-
-## Codebooks
-
-Use `build_codebook()` to pull REDCap project metadata and return a structured
-codebook with fields, choices, forms, events, event-instrument mappings,
-repeating instrument settings, and project-level summary metadata.
-
-```{r codebook-api, eval=FALSE}
-codebook <- build_codebook(
-  redcap_uri = redcap_uri,
-  token = token
-)
-
-codebook$fields
-codebook$choices
-codebook$forms
-```
-
-Use `mock_codebook` to inspect the structure without API credentials.
-
-```{r codebook-mock}
-mock_codebook
-
-head(mock_codebook$fields)
-mock_codebook$project
-```
-
-Use `view_codebook()` to review the codebook as an interactive HTML object with
-one table per available section.
-
-```{r view-codebook, eval=FALSE}
-viewer <- view_codebook(codebook)
-viewer
-
-htmltools::save_html(viewer, "codebook.html")
-```
-
-## Quality reports
-
-Use `build_quality_report()` to retrieve project records and metadata, run
-general data quality checks, and return findings, summaries, and interpreted
-metadata.
+`build_quality_report()` retrieves records and project structure, runs general
+data quality checks, and returns findings, summaries, and standardized metadata.
 
 ```{r quality-report-api, eval=FALSE}
 report <- build_quality_report(
@@ -147,51 +125,35 @@ report <- build_quality_report(
   token = token
 )
 
-report$findings
+report
 report$summaries$project
-report$summaries$fields
+report$findings
 ```
 
-Use `mock_quality_report` to see the shape of the report output and example
-findings.
+Use `mock_quality_report` to explore the report structure and example findings:
 
 ```{r quality-report-mock}
 mock_quality_report
 
 mock_quality_report$findings |>
   dplyr::select(
+    finding_id,
     check,
     issue,
     severity,
     record_id,
-    form_name,
-    field_name,
-    message
+    field_name
   )
-
-mock_quality_report$summaries$project
 ```
 
-The report can be limited to selected check groups when a focused review is
-needed.
+See the [quality report article](quality-report.html) for check definitions,
+output structure, interpretation guidance, and core assumptions.
 
-```{r quality-report-checks, eval=FALSE}
-report <- build_quality_report(
-  redcap_uri = redcap_uri,
-  token = token,
-  checks = c("missingness", "metadata")
-)
-```
+## Advanced project data access
 
-See the [quality report article](quality-report.html) for a complete reference
-to report checks, output elements, interpretation workflows, and core
-assumptions.
-
-## Pulling project data
-
-`pull_redcap_project()` retrieves the raw REDCap records and structural metadata
-used by the quality reporting workflow. This can be useful when you need the
-same API tables for custom exploration.
+`pull_redcap_project()` retrieves the record and structural metadata tables used
+by the quality-report workflow. Use it when a custom analysis needs the
+underlying API responses directly.
 
 ```{r pull-project-api, eval=FALSE}
 project <- pull_redcap_project(
@@ -202,10 +164,17 @@ project <- pull_redcap_project(
 names(project)
 ```
 
-The same top-level structure is represented by `mock_redcap_project`.
+`mock_redcap_project` has the same top-level structure:
 
 ```{r pull-project-mock}
 names(mock_redcap_project)
-
-mock_redcap_project$metadata
 ```
+
+## Next steps
+
+- Use the [quality report article](quality-report.html) for a deeper review of
+  quality checks and report interpretation.
+- Browse the [function reference](../reference/index.html) for complete
+  arguments and return values.
+- Explore `mock_redcap_project`, `mock_record_status_data`, `mock_codebook`, and
+  `mock_quality_report` when REDCap credentials are not available.

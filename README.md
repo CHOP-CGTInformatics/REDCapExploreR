@@ -12,11 +12,10 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 coverage](https://codecov.io/gh/CHOP-CGTInformatics/REDCapExploreR/branch/main/graph/badge.svg)](https://app.codecov.io/gh/CHOP-CGTInformatics/REDCapExploreR?branch=main)
 <!-- badges: end -->
 
-The goal of REDCapExploreR is to provide users with tools to perform
-exploratory data analysis on and quality assessments of REDCap project
-data using the REDCap API.
-
-This repository is in early stages active development!
+REDCapExploreR provides exploratory tools for REDCap projects accessed
+through the REDCap API. Use it to build structured codebooks, review
+form completion with record status dashboards, and generate general data
+quality reports.
 
 ## Installation
 
@@ -29,22 +28,31 @@ devtools::install_github("CHOP-CGTInformatics/REDCapExploreR")
 ## Core workflows
 
 Store REDCap credentials outside your scripts, then pass them to the
-package's build functions:
+build functions:
 
 ``` r
+library(REDCapExploreR)
+
 redcap_uri <- Sys.getenv("REDCAP_URI")
 token <- Sys.getenv("REDCAP_TOKEN")
 
-status_data <- build_record_status_data(redcap_uri, token)
+status_data <- build_record_status_data(
+  redcap_uri = redcap_uri,
+  token = token
+)
 plot_record_status(status_data)
 
-codebook <- build_codebook(redcap_uri, token)
-quality_report <- build_quality_report(redcap_uri, token)
+codebook <- build_codebook(redcap_uri = redcap_uri, token = token)
+quality_report <- build_quality_report(redcap_uri = redcap_uri, token = token)
 ```
 
-The package includes `mock_record_status_data`, `mock_codebook`, and
-`mock_quality_report` for offline exploration. See the getting-started
-vignette for an overview and the [quality report
+The package includes `mock_redcap_project`, `mock_record_status_data`,
+`mock_codebook`, and `mock_quality_report` for offline exploration. See
+[Get
+Started](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/REDCapExploreR.html)
+for an overview, the [function
+reference](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/index.html)
+for complete API documentation, and the [quality report
 article](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html)
 for a comprehensive guide to quality report checks, output elements, and
 assumptions.
