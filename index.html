@@ -68,8 +68,7 @@
 </div>
 <!-- badges: start -->
 
-<p>The goal of REDCapExploreR is to provide users with tools to perform exploratory data analysis on and quality assessments of REDCap project data using the REDCap API.</p>
-<p>This repository is in early stages active development!</p>
+<p>REDCapExploreR provides exploratory tools for REDCap projects accessed through the REDCap API. Use it to build structured codebooks, review form completion with record status dashboards, and generate general data quality reports.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -80,17 +79,22 @@
 <div class="section level2">
 <h2 id="core-workflows">Core workflows<a class="anchor" aria-label="anchor" href="#core-workflows"></a>
 </h2>
-<p>Store REDCap credentials outside your scripts, then pass them to the package’s build functions:</p>
+<p>Store REDCap credentials outside your scripts, then pass them to the build functions:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">redcap_uri</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_URI"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://chop-cgtinformatics.github.io/REDCapExploreR/">REDCapExploreR</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">redcap_uri</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_URI"</span><span class="op">)</span></span>
 <span><span class="va">token</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_TOKEN"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">status_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_record_status_data.html">build_record_status_data</a></span><span class="op">(</span><span class="va">redcap_uri</span>, <span class="va">token</span><span class="op">)</span></span>
+<span><span class="va">status_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_record_status_data.html">build_record_status_data</a></span><span class="op">(</span></span>
+<span>  redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>,</span>
+<span>  token <span class="op">=</span> <span class="va">token</span></span>
+<span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/plot_record_status.html">plot_record_status</a></span><span class="op">(</span><span class="va">status_data</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">codebook</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_codebook.html">build_codebook</a></span><span class="op">(</span><span class="va">redcap_uri</span>, <span class="va">token</span><span class="op">)</span></span>
-<span><span class="va">quality_report</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_quality_report.html">build_quality_report</a></span><span class="op">(</span><span class="va">redcap_uri</span>, <span class="va">token</span><span class="op">)</span></span></code></pre></div>
-<p>The package includes <code>mock_record_status_data</code>, <code>mock_codebook</code>, and <code>mock_quality_report</code> for offline exploration. See the getting-started vignette for an overview and the <a href="https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html">quality report article</a> for a comprehensive guide to quality report checks, output elements, and assumptions.</p>
+<span><span class="va">codebook</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_codebook.html">build_codebook</a></span><span class="op">(</span>redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>, token <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span>
+<span><span class="va">quality_report</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_quality_report.html">build_quality_report</a></span><span class="op">(</span>redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>, token <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span></code></pre></div>
+<p>The package includes <code>mock_redcap_project</code>, <code>mock_record_status_data</code>, <code>mock_codebook</code>, and <code>mock_quality_report</code> for offline exploration. See <a href="https://chop-cgtinformatics.github.io/REDCapExploreR/articles/REDCapExploreR.html">Get Started</a> for an overview, the <a href="https://chop-cgtinformatics.github.io/REDCapExploreR/reference/index.html">function reference</a> for complete API documentation, and the <a href="https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html">quality report article</a> for a comprehensive guide to quality report checks, output elements, and assumptions.</p>
 </div>
 <div class="section level2">
 <h2 id="collaboration">Collaboration<a class="anchor" aria-label="anchor" href="#collaboration"></a>
