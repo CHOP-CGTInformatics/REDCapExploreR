@@ -75,13 +75,13 @@
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://chop-cgtinformatics.github.io/REDCapExploreR/">REDCapExploreR</a></span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="../reference/build_quality_report.html">build_quality_report()</a></code> retrieves REDCap records and
 project structure, applies general data quality checks, and organizes
-the results for review. The report is intended to help data managers and
-analysts identify records, fields, and metadata that warrant attention.
-It does not modify the REDCap project.</p>
-<p>This article explains how to build and navigate a report. All
-evaluated examples use <code>mock_quality_report</code>, a synthetic
-report included with the package, so they do not require REDCap
-credentials.</p>
+the results for review. It helps data managers and analysts identify
+records, fields, and metadata that warrant attention without modifying
+the REDCap project.</p>
+<p>This article explains how to build, review, and interpret a quality
+report. All evaluated examples use <code>mock_quality_report</code>, a
+synthetic report included with the package, so they do not require
+REDCap credentials.</p>
 <div class="section level2">
 <h2 id="how-to-build-a-report">How to Build a Report<a class="anchor" aria-label="anchor" href="#how-to-build-a-report"></a>
 </h2>
@@ -96,73 +96,95 @@ such as in environment variables, and pass them to
 <span>  redcap_uri <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_URI"</span><span class="op">)</span>,</span>
 <span>  token <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_TOKEN"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><code>checks</code> controls which findings are generated. Summaries
-and interpreted metadata are still returned, while
-<code>finding_count</code> values in the project and record summaries
-reflect the selected check groups. <code>mock_quality_report</code> was
-built with all default check groups and thresholds.</p>
+</div>
+<div class="section level3">
+<h3 id="choose-checks">Choose checks<a class="anchor" aria-label="anchor" href="#choose-checks"></a>
+</h3>
 <p>The default call runs all five check groups:
 <code>missingness</code>, <code>metadata</code>, <code>outliers</code>,
 <code>operational</code>, and <code>consistency</code>. Use
-<code>checks</code> to run a focused review:</p>
+<code>checks</code> for a focused review:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">report</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_quality_report.html">build_quality_report</a></span><span class="op">(</span></span>
 <span>  redcap_uri <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_URI"</span><span class="op">)</span>,</span>
 <span>  token <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"REDCAP_TOKEN"</span><span class="op">)</span>,</span>
-<span>  checks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"missingness"</span>, <span class="st">"metadata"</span><span class="op">)</span>,</span>
-<span>  progress <span class="op">=</span> <span class="st">"none"</span></span>
+<span>  checks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"missingness"</span>, <span class="st">"metadata"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p>Summaries and standardized metadata are always returned. Project- and
+record-level <code>finding_count</code> values reflect only the selected
+check groups. <code>mock_quality_report</code> was built with all
+default checks and thresholds.</p>
 </div>
 <div class="section level3">
 <h3 id="set-heuristic-thresholds">Set heuristic thresholds<a class="anchor" aria-label="anchor" href="#set-heuristic-thresholds"></a>
 </h3>
-<p>Two arguments control when heuristic findings are produced. They do
-not change the underlying REDCap data or missing-rate calculations, but
-they can change findings and the associated <code>finding_count</code>
-summaries.</p>
-<p><code>sparse_threshold</code> is a proportion greater than
-<code>0</code> and less than or equal to <code>1</code>. For each field,
-the report calculates <code>missing_count / record_count</code> across
-rows eligible for missingness assessment. An
-<code>unexpected_sparse_field</code> finding is generated when that
-missing rate is greater than or equal to <code>sparse_threshold</code>.
-The default <code>0.95</code> therefore flags a field when at least 95%
-of its assessed values are missing. For example, a field with 19 missing
-values among 20 applicable rows has a missing rate of <code>0.95</code>
-and is flagged at the default threshold. Raising the threshold produces
-fewer sparse-field findings; lowering it makes the check more
-sensitive.</p>
-<p><code>outlier_iqr_multiplier</code> is a positive number used only by
-the <code>numeric_iqr_outlier</code> check. For each exported numeric,
-non-choice field other than the record identifier, the report calculates
-the first quartile (Q1), third quartile (Q3), and
-<code>IQR = Q3 - Q1</code>, then defines the heuristic range as:</p>
+<p>Two arguments control heuristic findings. They do not change the
+underlying REDCap data or missing-rate calculations.</p>
+<table class="table">
+<colgroup>
+<col width="18%">
+<col width="25%">
+<col width="18%">
+<col width="18%">
+<col width="18%">
+</colgroup>
+<thead><tr class="header">
+<th>Argument</th>
+<th align="right">Default</th>
+<th>Finding affected</th>
+<th>Lower values</th>
+<th>Higher values</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>sparse_threshold</code></td>
+<td align="right"><code>0.95</code></td>
+<td><code>unexpected_sparse_field</code></td>
+<td>Flag more fields</td>
+<td>Flag fewer fields</td>
+</tr>
+<tr class="even">
+<td><code>outlier_iqr_multiplier</code></td>
+<td align="right"><code>3</code></td>
+<td><code>numeric_iqr_outlier</code></td>
+<td>Flag more values</td>
+<td>Flag fewer values</td>
+</tr>
+</tbody>
+</table>
+<p>For each field, <code>sparse_threshold</code> is compared with
+<code>missing_count / record_count</code> across rows eligible for
+missingness assessment. A field is flagged when its missing rate is
+greater than or equal to the threshold. At the default
+<code>0.95</code>, a field with 19 missing values among 20 applicable
+rows is flagged.</p>
+<p>For each numeric, non-choice field other than the record identifier,
+<code>outlier_iqr_multiplier</code> defines the heuristic range:</p>
 <pre class="text"><code>lower bound = Q1 - outlier_iqr_multiplier * IQR
 upper bound = Q3 + outlier_iqr_multiplier * IQR</code></pre>
-<p>Values strictly outside that range are flagged. The default
-multiplier of <code>3</code> uses wider bounds than the conventional
-<code>1.5 * IQR</code> rule and is therefore less sensitive to moderate
-extremes. Smaller multipliers produce more findings; larger multipliers
-produce fewer. The check requires at least four observed values and a
-nonzero IQR, excludes choice fields and the record identifier, and does
-not affect REDCap validation-range or future-date findings.</p>
+<p>Values strictly outside the range are flagged. The default multiplier
+of <code>3</code> uses wider bounds than the conventional
+<code>1.5 * IQR</code> rule and is less sensitive to moderate extremes.
+The check requires at least four observed values and a nonzero IQR. It
+does not affect metadata-defined validation ranges or future-date
+findings.</p>
 </div>
-<div class="section level3">
-<h3 id="control-progress-output">Control progress output<a class="anchor" aria-label="anchor" href="#control-progress-output"></a>
-</h3>
-<p><code>progress = "auto"</code> is the default. It enables normally
-throttled progress updates in interactive sessions, such as an R
-console, and suppresses them in noninteractive scripts and most
-automated jobs. <code>progress = "show"</code> enables progress in all
-sessions and forces every report step to render. Use
-<code>progress = "none"</code> when no progress output should be
-emitted.</p>
 </div>
+<div class="section level2">
+<h2 id="how-to-review-a-report">How to Review a Report<a class="anchor" aria-label="anchor" href="#how-to-review-a-report"></a>
+</h2>
+<p>A practical review usually follows four steps:</p>
+<ol style="list-style-type: decimal">
+<li>Inspect the project overview.</li>
+<li>Count findings by check, issue, and severity.</li>
+<li>Filter record-field findings into a review queue.</li>
+<li>Join field metadata when labels or field types add context.</li>
+</ol>
 <div class="section level3">
 <h3 id="start-with-the-report-overview">Start with the report overview<a class="anchor" aria-label="anchor" href="#start-with-the-report-overview"></a>
 </h3>
 <p>Printing the report gives a short project-level overview. The object
-itself is a list with <code>findings</code>, <code>summaries</code>, and
+is a list with <code>findings</code>, <code>summaries</code>, and
 <code>metadata</code> elements.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span></span>
@@ -180,9 +202,9 @@ itself is a list with <code>findings</code>, <code>summaries</code>, and
 <span><span class="co">#&gt;  [4] "event_instruments"     "instruments"           "repeating_instruments"</span></span>
 <span><span class="co">#&gt;  [7] "choices"               "validation"            "branching"            </span></span>
 <span><span class="co">#&gt; [10] "record_id_field"       "source"</span></span></code></pre></div>
-<p>Begin with the project summary and a count of findings by check and
-issue. This shows the size and structure of the project alongside the
-types of review items that were found.</p>
+<p>Begin with the project summary and a count of findings. This shows
+project size and structure alongside the types of review items
+found.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">project</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 8</span></span></span>
@@ -205,9 +227,9 @@ types of review items that were found.</p>
 <div class="section level3">
 <h3 id="review-actionable-findings">Review actionable findings<a class="anchor" aria-label="anchor" href="#review-actionable-findings"></a>
 </h3>
-<p>Use <code>scope</code> to distinguish findings tied to a specific
-record and field from field-level metadata findings. The context columns
-remain available for longitudinal and repeating projects.</p>
+<p>Use <code>scope</code> to separate record-field findings from
+field-level metadata and aggregate findings. Event and repeat columns
+preserve context for longitudinal and repeating projects.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">record_findings</span> <span class="op">&lt;-</span> <span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">scope</span> <span class="op">==</span> <span class="st">"record_field"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -259,8 +281,8 @@ regulatory classification.</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>          3 info     future_date    demograp… enrollmen… 2999… On or b… Date f…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>          5 info     incomplete_fo… follow_up follow_up… Inco… Complete Comple…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>          6 info     incomplete_fo… adverse_… adverse_e… Unve… Complete Comple…</span></span></code></pre></div>
-<p>Join findings to interpreted field metadata when labels and field
-types are useful during review:</p>
+<p>Join findings to field metadata when labels and field types are
+useful during review:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">field_reference</span> <span class="op">&lt;-</span> <span class="va">mock_quality_report</span><span class="op">$</span><span class="va">metadata</span><span class="op">$</span><span class="va">fields</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">field_name</span>, <span class="va">field_label</span>, <span class="va">field_type</span>, <span class="va">required_field</span><span class="op">)</span></span>
@@ -283,192 +305,6 @@ types are useful during review:</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>          1 high_ri… <span style="color: #BB0000;">NA</span>        visit_not… Visit notes notes      FALSE         </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>          2 outside… C002      age        Age at enr… text       TRUE          </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>          3 future_… C002      enrollmen… Enrollment… text       TRUE</span></span></code></pre></div>
-</div>
-</div>
-<div class="section level2">
-<h2 id="missingness">Missingness<a class="anchor" aria-label="anchor" href="#missingness"></a>
-</h2>
-<p>Missingness is evaluated in two stages. The report first determines
-whether a field should be assessed on a particular exported row. It then
-determines whether that field has an observed value. This prevents
-structural blanks from events, repeating instruments, branching logic,
-and unfinished forms from being treated as missing data.</p>
-<div class="section level3">
-<h3 id="form-status-determines-which-rows-are-assessed">Form status determines which rows are assessed<a class="anchor" aria-label="anchor" href="#form-status-determines-which-rows-are-assessed"></a>
-</h3>
-<p>A field is eligible for missingness assessment only when its raw
-REDCap form status column, <code>&lt;form_name&gt;_complete</code>, is
-Unverified (<code>1</code>) or Complete (<code>2</code>). Rows with an
-Incomplete (<code>0</code>), blank, or unavailable form status do not
-contribute to field <code>record_count</code>,
-<code>missing_count</code>, or <code>missing_rate</code>.</p>
-<p>Non-Complete statuses, including Incomplete, Unverified, and blank
-values, are still reviewable through the
-<code>incomplete_form_status</code> operational finding. The distinction
-is intentional: Unverified forms are treated as sufficiently assessable
-but have not been marked Complete, while Incomplete forms can contain
-expected blanks that should not inflate missingness findings. If a form
-has no exported completion status column, its fields have no assessable
-rows and their missing rates are <code>NA</code>.</p>
-</div>
-<div class="section level3">
-<h3 id="per-field-missingness-evaluation">Per-field missingness evaluation<a class="anchor" aria-label="anchor" href="#per-field-missingness-evaluation"></a>
-</h3>
-<p>Among rows with an assessable form status, applicability also
-accounts for:</p>
-<ol style="list-style-type: decimal">
-<li>The event-to-form mapping in longitudinal projects.</li>
-<li>Repeating event and instrument configuration.</li>
-<li>The repeating instrument associated with each exported row.</li>
-<li>Supported branching logic that determines whether the field is
-shown.</li>
-</ol>
-<p>For applicable rows, <code>NA</code> and blank or whitespace-only
-values are missing. Each field summary reports:</p>
-<ul>
-<li>
-<code>record_count</code>: applicable rows assessed for the
-field.</li>
-<li>
-<code>missing_count</code>: applicable rows with a missing
-value.</li>
-<li>
-<code>observed_count</code>: applicable rows with an observed
-value.</li>
-<li>
-<code>missing_rate</code>:
-<code>missing_count / record_count</code>, or <code>NA</code> when no
-rows are applicable.</li>
-</ul>
-<p>A missing required field produces a record-level
-<code>required_field_missing</code> finding. Any field, whether required
-or optional, can produce a field-level
-<code>unexpected_sparse_field</code> finding when its missing rate meets
-<code>sparse_threshold</code>.</p>
-</div>
-<div class="section level3">
-<h3 id="checkbox-fields">Checkbox fields<a class="anchor" aria-label="anchor" href="#checkbox-fields"></a>
-</h3>
-<p>REDCap exports a checkbox field as one <code>0</code>/<code>1</code>
-column per choice. The report evaluates missingness at the parent-field
-level rather than treating every unchecked choice as a missing
-value:</p>
-<ul>
-<li>One or more checked (<code>1</code>) choices make the parent
-checkbox field observed.</li>
-<li>All choices explicitly unchecked (<code>0</code>) are also observed.
-This represents a meaningful no-selection state rather than a missing
-response.</li>
-<li>The parent field is missing only when every exported choice value is
-<code>NA</code> or blank on an otherwise applicable row.</li>
-<li>A checked explicit option labeled “None”, “No”, “Not applicable”,
-“N/A”, “NA”, or “None of the above” is an observed response. Selecting
-one of these with another option can separately produce a
-<code>checkbox_none_with_other</code> consistency finding.</li>
-</ul>
-<p>The form-status rule is applied first. Consequently, checkbox exports
-on an Incomplete form are ignored for missingness. On an Unverified or
-Complete form, an explicit all-zero state does not contribute to
-missingness, while an all-missing set of choice exports can contribute
-to sparse-field summaries and, for a required checkbox field, a
-<code>required_field_missing</code> finding.</p>
-<p>Both checkbox consistency findings use only applicable rows from
-Unverified or Complete forms. When no options are selected anywhere for
-a checkbox field, the report produces one field-level
-<code>checkbox_no_values_selected</code> informational finding. It is a
-prompt to confirm that the no-selection state is intentional, not a
-missingness finding.</p>
-</div>
-</div>
-<div class="section level2">
-<h2 id="metadata-defined-validation">Metadata-Defined Validation<a class="anchor" aria-label="anchor" href="#metadata-defined-validation"></a>
-</h2>
-<p>Choice and text validation findings compare exported raw values with
-rules configured in REDCap metadata. Unlike missingness, these checks
-inspect nonblank values on structurally applicable rows regardless of
-whether a form is Incomplete, Unverified, or Complete. Event-to-form and
-repeating-instrument mappings are respected. Branching logic does not
-suppress these findings: a stored nonblank value that violates its
-metadata remains reviewable even when the field is currently hidden.</p>
-<p>The records pull disables automatic column type guessing so raw
-choice codes such as <code>0</code> and <code>1</code> remain character
-values rather than being converted to logical <code>FALSE</code> and
-<code>TRUE</code>. Only empty CSV values are imported as missing;
-literal codes such as <code>"NA"</code> are preserved for comparison
-with metadata.</p>
-<div class="section level3">
-<h3 id="choice-values">Choice values<a class="anchor" aria-label="anchor" href="#choice-values"></a>
-</h3>
-<p><code>invalid_choice_value</code> identifies raw codes that are not
-among a field’s metadata choices for radio, dropdown, Yes/No, and
-True/False fields. Yes/No and True/False use their implicit REDCap
-<code>0</code>/<code>1</code> definitions.</p>
-<p>Checkbox fields are not assessed by
-<code>invalid_choice_value</code>. Their metadata codes identify the
-separate exported option columns, while each option column contains a
-<code>0</code> or <code>1</code> selection state. Checkbox review
-remains available through <code>checkbox_no_values_selected</code> and
-<code>checkbox_none_with_other</code>.</p>
-<p>Fields without an explicit radio, dropdown, or checkbox definition
-cannot be compared with allowed codes. They produce
-<code>missing_choice_definition</code> under the metadata check instead
-of an invalid-choice finding.</p>
-</div>
-<div class="section level3">
-<h3 id="text-validation-formats-and-bounds">Text validation formats and bounds<a class="anchor" aria-label="anchor" href="#text-validation-formats-and-bounds"></a>
-</h3>
-<p><code>invalid_validation_format</code> applies only when all of the
-following are true:</p>
-<ol style="list-style-type: decimal">
-<li>The metadata <code>field_type</code> is <code>text</code>.</li>
-<li>
-<code>text_validation_type_or_show_slider_number</code> contains a
-supported REDCap validation type.</li>
-<li>The exported value is nonblank on a structurally applicable
-row.</li>
-</ol>
-<p>The report does not infer validation from an R column class, field
-name, question text, or observed values. Text fields without configured
-validation and unsupported validation types are not assessed.</p>
-<p>Supported metadata validation families are:</p>
-<ul>
-<li>
-<code>integer</code>; <code>number</code>; decimal-place variants
-from <code>number_1dp</code> through <code>number_4dp</code>; and their
-<code>*_comma_decimal</code> variants.</li>
-<li>
-<code>date_dmy</code>, <code>date_mdy</code>, and
-<code>date_ymd</code>.</li>
-<li>DMY, MDY, and YMD <code>datetime_*</code> types, with or without
-seconds.</li>
-<li>
-<code>time</code>, <code>time_hh_mm_ss</code>, and
-<code>time_mm_ss</code>.</li>
-<li>
-<code>email</code>, <code>phone</code>, and
-<code>phone_australia</code>.</li>
-</ul>
-<p>The DMY, MDY, and YMD suffix controls REDCap’s data-entry display,
-but REDCap exports stored date and datetime values through the API in
-canonical YMD order. The report therefore validates all date types as
-<code>YYYY-MM-DD</code> and datetime types as
-<code>YYYY-MM-DD HH:MM</code> or <code>YYYY-MM-DD HH:MM:SS</code>,
-depending on whether the validation includes seconds.</p>
-<p>Parsing remains strict for impossible calendar or clock values,
-decimal separators, configured decimal precision, and scientific
-notation. REDCap number validations accept decimal values with or
-without a leading zero, such as <code>0.850</code> and
-<code>.850</code>. Email checks assess structure rather than
-deliverability. Phone checks allow common punctuation and assess North
-American or Australian digit structure; they do not verify that a number
-is assigned.</p>
-<p>When supplied, <code>text_validation_min</code> and
-<code>text_validation_max</code> produce
-<code>outside_validation_range</code> findings for validly formatted
-numeric, date, datetime, and time values outside those user-configured
-bounds. Either bound can be used alone. A malformed value produces
-<code>invalid_validation_format</code> and is excluded from range and
-future-date checks to avoid duplicate or misleading findings.</p>
 </div>
 </div>
 <div class="section level2">
@@ -510,7 +346,7 @@ priority.</td>
 <tr class="odd">
 <td><code>scope</code></td>
 <td>
-<code>record_field</code> for record-level findings or
+<code>record_field</code> for record-field findings or
 <code>field</code> for metadata and aggregate findings.</td>
 </tr>
 <tr class="even">
@@ -539,7 +375,7 @@ priority.</td>
 </tr>
 <tr class="even">
 <td><code>value</code></td>
-<td>Observed value or aggregate value that triggered the finding.</td>
+<td>Observed or aggregate value that triggered the finding.</td>
 </tr>
 <tr class="odd">
 <td><code>expected</code></td>
@@ -551,132 +387,211 @@ priority.</td>
 </tr>
 </tbody>
 </table>
-<p>The following checks are currently performed.</p>
+<p>The current findings are grouped below by check.</p>
+<div class="section level4">
+<h4 id="missingness">Missingness<a class="anchor" aria-label="anchor" href="#missingness"></a>
+</h4>
+<p>These checks describe absent data only where a field is eligible for
+assessment. They identify required values that are missing on specific
+rows and fields whose eligible values are almost entirely missing.</p>
 <table class="table">
 <colgroup>
-<col width="25%">
-<col width="25%">
-<col width="25%">
-<col width="25%">
+<col width="33%">
+<col width="33%">
+<col width="33%">
 </colgroup>
 <thead><tr class="header">
-<th>Check</th>
 <th>Issue</th>
 <th>What it identifies</th>
 <th>Severity and scope</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td>Missingness</td>
 <td><code>required_field_missing</code></td>
-<td>A required field is blank on a row where the form and branching
-logic are applicable and completion status permits missingness
-assessment.</td>
+<td>A required field is blank where form status, project structure, and
+supported branching logic permit assessment.</td>
 <td>Warning, <code>record_field</code>
 </td>
 </tr>
 <tr class="even">
-<td>Missingness</td>
 <td><code>unexpected_sparse_field</code></td>
-<td>A field’s missing rate is at or above <code>sparse_threshold</code>
-among its applicable rows.</td>
-<td>Info, field</td>
+<td>A field’s missing rate meets or exceeds
+<code>sparse_threshold</code> among applicable rows.</td>
+<td>Info, <code>field</code>
+</td>
 </tr>
+</tbody>
+</table>
+</div>
+<div class="section level4">
+<h4 id="metadata">Metadata<a class="anchor" aria-label="anchor" href="#metadata"></a>
+</h4>
+<p>Metadata checks inspect project design rather than the validity of
+individual record values. They highlight labels, choice definitions, and
+free-text fields that may need review by a project designer or data
+manager.</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Issue</th>
+<th>What it identifies</th>
+<th>Severity and scope</th>
+</tr></thead>
+<tbody>
 <tr class="odd">
-<td>Metadata</td>
 <td><code>duplicate_field_label</code></td>
-<td>The same nonblank field label is used by multiple field names.</td>
-<td>Info, field</td>
+<td>The same nonblank label is used by multiple field names.</td>
+<td>Info, <code>field</code>
+</td>
 </tr>
 <tr class="even">
-<td>Metadata</td>
 <td><code>missing_field_label</code></td>
 <td>A field has no label.</td>
-<td>Info, field</td>
+<td>Info, <code>field</code>
+</td>
 </tr>
 <tr class="odd">
-<td>Metadata</td>
 <td><code>missing_choice_definition</code></td>
 <td>A radio, dropdown, or checkbox field has no explicit choice
 definition.</td>
-<td>Warning, field</td>
+<td>Warning, <code>field</code>
+</td>
 </tr>
 <tr class="even">
-<td>Metadata</td>
 <td><code>high_risk_free_text</code></td>
 <td>A text or notes field name or label contains terms associated with
 notes, comments, other details, or similar free text.</td>
-<td>Info, field</td>
+<td>Info, <code>field</code>
+</td>
 </tr>
+</tbody>
+</table>
+<p>Yes/No and True/False fields use implicit REDCap choices, so they do
+not require explicit choice definitions.</p>
+</div>
+<div class="section level4">
+<h4 id="outliers">Outliers<a class="anchor" aria-label="anchor" href="#outliers"></a>
+</h4>
+<p>Outlier checks combine rules configured in REDCap with general review
+heuristics. They identify values outside metadata bounds, unusually
+distant numeric values, and dates after the report is built.</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Issue</th>
+<th>What it identifies</th>
+<th>Severity and scope</th>
+</tr></thead>
+<tbody>
 <tr class="odd">
-<td>Outliers</td>
 <td><code>outside_validation_range</code></td>
-<td>A validly formatted numeric, date, datetime, or time value is
-outside <code>text_validation_min</code> or
+<td>A valid numeric, date, datetime, or time value is outside
+<code>text_validation_min</code> or
 <code>text_validation_max</code>.</td>
 <td>Warning, <code>record_field</code>
 </td>
 </tr>
 <tr class="even">
-<td>Outliers</td>
 <td><code>numeric_iqr_outlier</code></td>
-<td>A numeric, non-choice field falls outside the configured IQR
-heuristic. At least four observed values and a nonzero IQR are
-required.</td>
+<td>A numeric, non-choice value is outside the configured IQR
+heuristic.</td>
 <td>Info, <code>record_field</code>
 </td>
 </tr>
 <tr class="odd">
-<td>Outliers</td>
 <td><code>future_date</code></td>
-<td>A validly formatted date or datetime value occurs after the report
-date.</td>
+<td>A valid date or datetime has a calendar date after the system date
+captured when the report is built.</td>
 <td>Info, <code>record_field</code>
-</td>
-</tr>
-<tr class="even">
-<td>Operational</td>
-<td><code>incomplete_form_status</code></td>
-<td>An applicable form status is missing or is not Complete.</td>
-<td>Info, <code>record_field</code>
-</td>
-</tr>
-<tr class="odd">
-<td>Consistency</td>
-<td><code>invalid_choice_value</code></td>
-<td>A raw radio, dropdown, Yes/No, or True/False code is absent from
-metadata choices.</td>
-<td>Warning, <code>record_field</code>
-</td>
-</tr>
-<tr class="even">
-<td>Consistency</td>
-<td><code>invalid_validation_format</code></td>
-<td>A text value does not satisfy its configured
-<code>text_validation_type_or_show_slider_number</code> rule.</td>
-<td>Warning, <code>record_field</code>
-</td>
-</tr>
-<tr class="odd">
-<td>Consistency</td>
-<td><code>checkbox_no_values_selected</code></td>
-<td>No options are selected for a checkbox field across applicable
-Unverified or Complete forms.</td>
-<td>Info, field</td>
-</tr>
-<tr class="even">
-<td>Consistency</td>
-<td><code>checkbox_none_with_other</code></td>
-<td>A checkbox option labeled None, No, Not applicable, N/A, NA, or None
-of the above is selected with another option.</td>
-<td>Warning, <code>record_field</code>
 </td>
 </tr>
 </tbody>
 </table>
 <p>Choice fields are excluded from IQR outlier detection even when their
-codes are numeric. Yes/No and True/False fields have implicit REDCap
-choices, so they do not require an explicit choice definition.</p>
+stored codes are numeric, because those codes represent categories
+rather than quantities.</p>
+</div>
+<div class="section level4">
+<h4 id="operational">Operational<a class="anchor" aria-label="anchor" href="#operational"></a>
+</h4>
+<p>Operational checks review REDCap workflow state rather than field
+values. The current check identifies applicable forms that have not been
+marked Complete.</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Issue</th>
+<th>What it identifies</th>
+<th>Severity and scope</th>
+</tr></thead>
+<tbody><tr class="odd">
+<td><code>incomplete_form_status</code></td>
+<td>An applicable form status is missing or is not Complete.</td>
+<td>Info, <code>record_field</code>
+</td>
+</tr></tbody>
+</table>
+</div>
+<div class="section level4">
+<h4 id="consistency">Consistency<a class="anchor" aria-label="anchor" href="#consistency"></a>
+</h4>
+<p>Consistency checks compare stored values with their field definitions
+and identify contradictory checkbox selections. These findings are tied
+to either a specific record-field value or an aggregate checkbox
+pattern.</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Issue</th>
+<th>What it identifies</th>
+<th>Severity and scope</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>invalid_choice_value</code></td>
+<td>A raw radio, dropdown, Yes/No, or True/False code is absent from the
+field’s choices.</td>
+<td>Warning, <code>record_field</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>invalid_validation_format</code></td>
+<td>A text value does not satisfy its configured REDCap validation.</td>
+<td>Warning, <code>record_field</code>
+</td>
+</tr>
+<tr class="odd">
+<td><code>checkbox_no_values_selected</code></td>
+<td>No options are selected across assessed rows with explicit checkbox
+exports.</td>
+<td>Info, <code>field</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>checkbox_none_with_other</code></td>
+<td>A none-like option is selected with another checkbox option.</td>
+<td>Warning, <code>record_field</code>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
 </div>
 <div class="section level3">
 <h3 id="summaries">Summaries<a class="anchor" aria-label="anchor" href="#summaries"></a>
@@ -704,8 +619,8 @@ returned by REDCap.</li>
 <code>missing_rate</code>: weighted missing fraction across
 applicable field-row cells.</li>
 <li>
-<code>finding_count</code>: total number of findings from the
-selected check groups.</li>
+<code>finding_count</code>: total findings from the selected check
+groups.</li>
 </ul>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">project</span></span>
@@ -721,13 +636,13 @@ selected check groups.</li>
 </h4>
 <p><code>summaries$forms</code> reports field counts, required-field
 counts, and weighted missing rates by form.
-<code>summaries$fields</code> gives the most detailed missingness
+<code>summaries$fields</code> provides the detailed missingness
 profile:</p>
 <ul>
 <li>
 <code>record_count</code> is the number of applicable rows assessed
 for the field. It is not necessarily the number of distinct records
-because longitudinal and repeating projects can contribute multiple rows
+because events and repeating instruments can contribute multiple rows
 per record.</li>
 <li>
 <code>missing_count</code> and <code>observed_count</code> partition
@@ -775,7 +690,7 @@ rows are applicable.</li>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">11</span> symptoms     follow_up FALSE                     0             0           <span style="color: #BB0000;">NA</span></span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># ℹ 1 more variable: distinct_count &lt;int&gt;</span></span></span></code></pre></div>
 <p>Project and form missing rates are weighted across applicable
-field-row cells. They are not simple averages of field-level
+field-row cells; they are not simple averages of field-level
 percentages.</p>
 </div>
 <div class="section level4">
@@ -783,9 +698,9 @@ percentages.</p>
 </h4>
 <p><code>summaries$records</code> contains one row per record.
 <code>missing_field_count</code> sums missing applicable field values
-across that record’s events and repeat instances, while
-<code>finding_count</code> counts record-specific findings. Field-level
-metadata findings do not belong to an individual record.</p>
+across that record’s events and repeat instances.
+<code>finding_count</code> counts record-specific findings; field-level
+findings do not belong to an individual record.</p>
 <p><code>summaries$events</code> counts raw API rows by unique event
 name. It is empty for nonlongitudinal projects.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
@@ -807,10 +722,10 @@ name. It is empty for nonlongitudinal projects.</p>
 </div>
 </div>
 <div class="section level3">
-<h3 id="metadata">Metadata<a class="anchor" aria-label="anchor" href="#metadata"></a>
+<h3 id="metadata-1">Metadata<a class="anchor" aria-label="anchor" href="#metadata-1"></a>
 </h3>
-<p><code>metadata</code> preserves and interprets project structure used
-by the checks.</p>
+<p><code>metadata</code> preserves the standardized project structure
+used by the checks.</p>
 <table class="table">
 <colgroup>
 <col width="50%">
@@ -844,8 +759,8 @@ counts.</td>
 </tr>
 <tr class="even">
 <td><code>repeating_instruments</code></td>
-<td>Repeating event and instrument configuration returned by REDCap,
-with normalized join columns.</td>
+<td>Repeating event and instrument configuration returned by
+REDCap.</td>
 </tr>
 <tr class="odd">
 <td><code>choices</code></td>
@@ -871,9 +786,8 @@ choices.</td>
 </tr>
 </tbody>
 </table>
-<p>These tables are useful for interpreting findings and for
-project-level review that is not represented by a finding. For example,
-inspect repeating structure and validation rules directly:</p>
+<p>These tables support project-level review and help interpret
+findings:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">metadata</span><span class="op">$</span><span class="va">repeating_instruments</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 6</span></span></span>
@@ -902,19 +816,334 @@ inspect repeating structure and validation rules directly:</p>
 </div>
 </div>
 <div class="section level2">
+<h2 id="how-checks-work">How Checks Work<a class="anchor" aria-label="anchor" href="#how-checks-work"></a>
+</h2>
+<p>Different check groups intentionally evaluate different sets of rows.
+In this table, <strong>form status</strong> determines whether the row
+can enter the check, <strong>branching logic</strong> determines whether
+a currently hidden field is excluded, and <strong>blank values</strong>
+describes what happens after a row and field are eligible.</p>
+<table class="table">
+<colgroup>
+<col width="25%">
+<col width="25%">
+<col width="25%">
+<col width="25%">
+</colgroup>
+<thead><tr class="header">
+<th>Evaluation</th>
+<th>Form status</th>
+<th>Branching logic</th>
+<th>Blank values</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Missingness</td>
+<td>Only Unverified or Complete forms are evaluated.</td>
+<td>A field is evaluated only where supported logic indicates it is
+shown.</td>
+<td>A blank eligible value is counted as missing.</td>
+</tr>
+<tr class="even">
+<td>Choice and text validation</td>
+<td>Stored values are evaluated for any form status, including
+Incomplete.</td>
+<td>A stored value is evaluated even if branching currently hides the
+field.</td>
+<td>Blank values do not produce choice or format findings. Eligible
+blanks are handled separately by missingness checks.</td>
+</tr>
+<tr class="odd">
+<td>Checkbox consistency</td>
+<td>Only Unverified or Complete forms are evaluated.</td>
+<td>A checkbox is evaluated only where supported logic indicates it is
+shown.</td>
+<td>Explicit <code>0</code> values are meaningful; rows where every
+option is blank are skipped.</td>
+</tr>
+<tr class="even">
+<td>Metadata</td>
+<td>Record rows and form status are not used.</td>
+<td>Branching logic does not control metadata checks.</td>
+<td>A blank label or choice definition can trigger a metadata finding;
+blank record values are not examined.</td>
+</tr>
+</tbody>
+</table>
+<p>“Supported logic” refers to the subset of REDCap branching
+expressions the package can evaluate, described under Core Assumptions.
+Event-to-form mappings and repeating configuration are respected
+whenever a check evaluates record data. For example, a blank field on a
+Complete form counts as missing only when supported branching logic
+shows that field. By contrast, a nonblank malformed value on an
+Incomplete form can still produce a validation finding, even when
+branching currently hides the field.</p>
+<div class="section level3">
+<h3 id="missingness-1">Missingness<a class="anchor" aria-label="anchor" href="#missingness-1"></a>
+</h3>
+<p>Missingness is evaluated in two stages. The report first determines
+whether a field should be assessed on an exported row, then determines
+whether the field has an observed value. This prevents structural blanks
+from events, repeating instruments, branching logic, and unfinished
+forms from being treated as missing data.</p>
+<div class="section level4">
+<h4 id="form-status">Form status<a class="anchor" aria-label="anchor" href="#form-status"></a>
+</h4>
+<p>Raw REDCap form status determines whether a row contributes to
+missingness:</p>
+<table class="table">
+<thead><tr class="header">
+<th>Form status</th>
+<th align="right">Included in missingness?</th>
+<th align="right">
+<code>incomplete_form_status</code>?</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Incomplete (<code>0</code>)</td>
+<td align="right">No</td>
+<td align="right">Yes</td>
+</tr>
+<tr class="even">
+<td>Unverified (<code>1</code>)</td>
+<td align="right">Yes</td>
+<td align="right">Yes</td>
+</tr>
+<tr class="odd">
+<td>Complete (<code>2</code>)</td>
+<td align="right">Yes</td>
+<td align="right">No</td>
+</tr>
+<tr class="even">
+<td>Blank value</td>
+<td align="right">No</td>
+<td align="right">Yes, when the form is otherwise applicable</td>
+</tr>
+<tr class="odd">
+<td>Status column unavailable</td>
+<td align="right">No</td>
+<td align="right">No status finding can be generated</td>
+</tr>
+</tbody>
+</table>
+<p>If a form has no exported <code>&lt;form_name&gt;_complete</code>
+column, its fields have no assessable rows and their missing rates are
+<code>NA</code>.</p>
+</div>
+<div class="section level4">
+<h4 id="field-applicability">Field applicability<a class="anchor" aria-label="anchor" href="#field-applicability"></a>
+</h4>
+<p>Among rows with an assessable status, applicability accounts for:</p>
+<ol style="list-style-type: decimal">
+<li>Event-to-form mappings in longitudinal projects.</li>
+<li>Repeating event and instrument configuration.</li>
+<li>The repeating instrument associated with each exported row.</li>
+<li>Supported branching logic that determines whether the field is
+shown.</li>
+</ol>
+<p>For applicable non-checkbox fields, <code>NA</code> and blank or
+whitespace-only values are missing. A missing required field produces
+<code>required_field_missing</code>. Any required or optional field can
+produce <code>unexpected_sparse_field</code> when its missing rate meets
+<code>sparse_threshold</code>.</p>
+</div>
+<div class="section level4">
+<h4 id="checkbox-behavior">Checkbox behavior<a class="anchor" aria-label="anchor" href="#checkbox-behavior"></a>
+</h4>
+<p>REDCap exports one <code>0</code>/<code>1</code> column per checkbox
+choice. The report evaluates missingness at the parent-field level:</p>
+<ul>
+<li>One or more checked (<code>1</code>) choices are observed.</li>
+<li>All choices explicitly unchecked (<code>0</code>) are also observed.
+This is a meaningful no-selection state.</li>
+<li>The parent field is missing only when every exported choice value is
+<code>NA</code> or blank on an otherwise applicable row.</li>
+</ul>
+<p>On an Incomplete form, checkbox exports are ignored for missingness.
+On an Unverified or Complete form, an all-zero state is observed, while
+an all-missing set can contribute to sparse-field and required-field
+findings.</p>
+<p>Checkbox consistency findings do not redefine the all-zero state as
+missing:</p>
+<ul>
+<li>
+<code>checkbox_no_values_selected</code> is one field-level prompt
+when no option is selected across assessed rows with explicit checkbox
+exports.</li>
+<li>
+<code>checkbox_none_with_other</code> is a record-field warning when
+an option labeled “None”, “No”, “Not applicable”, “N/A”, “NA”, or “None
+of the above” is selected with another option.</li>
+</ul>
+</div>
+</div>
+<div class="section level3">
+<h3 id="metadata-defined-validation">Metadata-defined validation<a class="anchor" aria-label="anchor" href="#metadata-defined-validation"></a>
+</h3>
+<p>REDCap metadata records the validation selected by a project designer
+in the REDCap field configuration UI. For text fields, the selected
+validation type and optional minimum or maximum are exported in the
+<code>text_validation_*</code> columns. Choice definitions configured in
+REDCap are similarly exported as field metadata.</p>
+<p>The report compares nonblank raw values with these user-configured
+rules. It inspects structurally applicable rows regardless of whether a
+form is Incomplete, Unverified, or Complete. Branching logic does not
+suppress a stored value that violates its metadata rule.</p>
+<div class="section level4">
+<h4 id="choice-values">Choice values<a class="anchor" aria-label="anchor" href="#choice-values"></a>
+</h4>
+<p><code>invalid_choice_value</code> identifies raw codes absent from
+metadata choices for radio, dropdown, Yes/No, and True/False fields.
+Yes/No and True/False use their implicit REDCap
+<code>0</code>/<code>1</code> definitions.</p>
+<p>Checkbox fields are excluded. Their metadata codes identify separate
+option columns, while each exported cell contains a <code>0</code> or
+<code>1</code> selection state.</p>
+</div>
+<div class="section level4">
+<h4 id="why-the-raw-export-is-used">Why the raw export is used<a class="anchor" aria-label="anchor" href="#why-the-raw-export-is-used"></a>
+</h4>
+<p>REDCap choice fields have a stored code and a displayed label.
+Validation must compare the stored code with the codes defined in
+metadata, so the report requests raw values rather than labels. For
+example, a dropdown choice stored as code <code>1</code> remains
+<code>"1"</code> instead of being replaced by its display label.</p>
+<p>Automatic column type guessing is also disabled. This prevents a
+column of <code>0</code> and <code>1</code> codes from being converted
+to logical <code>FALSE</code> and <code>TRUE</code>, which would no
+longer match the REDCap choice definitions. Empty API cells are imported
+as missing, while a literal code such as <code>"NA"</code> is preserved
+as an actual value.</p>
+<p>Fields without explicit radio, dropdown, or checkbox definitions
+produce <code>missing_choice_definition</code> instead of an
+invalid-choice finding.</p>
+</div>
+<div class="section level4">
+<h4 id="text-formats-and-bounds">Text formats and bounds<a class="anchor" aria-label="anchor" href="#text-formats-and-bounds"></a>
+</h4>
+<p><code>invalid_validation_format</code> applies only to
+<code>text</code> fields with a supported
+<code>text_validation_type_or_show_slider_number</code>. The report does
+not infer validation from R classes, field names, labels, or observed
+values.</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Family</th>
+<th>Metadata examples</th>
+<th>Validation behavior</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Integer</td>
+<td><code>integer</code></td>
+<td>Integer syntax; scientific notation is rejected.</td>
+</tr>
+<tr class="even">
+<td>Number</td>
+<td>
+<code>number</code>, <code>number_1dp</code> through
+<code>number_4dp</code>, comma-decimal variants</td>
+<td>Configured decimal mark and precision; a leading zero is
+optional.</td>
+</tr>
+<tr class="odd">
+<td>Date</td>
+<td>
+<code>date_dmy</code>, <code>date_mdy</code>,
+<code>date_ymd</code>
+</td>
+<td>Canonical API value <code>YYYY-MM-DD</code>; impossible dates are
+rejected.</td>
+</tr>
+<tr class="even">
+<td>Datetime</td>
+<td>DMY, MDY, and YMD <code>datetime_*</code> types</td>
+<td>Canonical YMD export with minutes or seconds, according to the
+validation type.</td>
+</tr>
+<tr class="odd">
+<td>Time</td>
+<td>
+<code>time</code>, <code>time_hh_mm_ss</code>,
+<code>time_mm_ss</code>
+</td>
+<td>Configured format and clock boundaries.</td>
+</tr>
+<tr class="even">
+<td>Email</td>
+<td><code>email</code></td>
+<td>Structural email format, not deliverability.</td>
+</tr>
+<tr class="odd">
+<td>Phone</td>
+<td>
+<code>phone</code>, <code>phone_australia</code>
+</td>
+<td>Common punctuation and regional digit structure.</td>
+</tr>
+</tbody>
+</table>
+<p>The DMY, MDY, and YMD suffix controls REDCap’s data-entry display.
+API exports still use canonical YMD date and datetime values. Number
+validations accept values with or without a leading zero, such as
+<code>0.850</code> and <code>.850</code>.</p>
+<p>When provided, <code>text_validation_min</code> and
+<code>text_validation_max</code> produce
+<code>outside_validation_range</code> for valid numeric, date, datetime,
+and time values outside the configured bounds. Either bound can be used
+alone. Malformed values produce <code>invalid_validation_format</code>
+but not range or future-date findings.</p>
+<p>Use issue names to review metadata-defined validation findings
+together. The mock report contains a range violation but no malformed
+formats or invalid choice codes.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">validation_issues</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>  <span class="st">"invalid_choice_value"</span>,</span>
+<span>  <span class="st">"invalid_validation_format"</span>,</span>
+<span>  <span class="st">"outside_validation_range"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">issue</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">validation_issues</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">record_id</span>, <span class="va">field_name</span>, <span class="va">issue</span>, <span class="va">value</span>, <span class="va">expected</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 5</span></span></span>
+<span><span class="co">#&gt;   record_id field_name issue                    value expected         </span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> C002      age        outside_validation_range 999   Between 0 and 120</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level3">
+<h3 id="distribution-and-future-date-checks">Distribution and future-date checks<a class="anchor" aria-label="anchor" href="#distribution-and-future-date-checks"></a>
+</h3>
+<p><code>numeric_iqr_outlier</code> is a distribution-based heuristic,
+not a REDCap metadata rule. Its behavior depends on sample size, field
+distribution, and <code>outlier_iqr_multiplier</code>.</p>
+<p><code>future_date</code> applies to valid date and datetime fields.
+It compares the exported calendar date with <code><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.Date()</a></code>
+captured when the report runs. A date after that system date is flagged;
+a datetime later on the same calendar day is not. Malformed temporal
+values are handled by <code>invalid_validation_format</code>
+instead.</p>
+</div>
+</div>
+<div class="section level2">
 <h2 id="core-assumptions">Core Assumptions<a class="anchor" aria-label="anchor" href="#core-assumptions"></a>
 </h2>
 <div class="section level3">
 <h3 id="findings-are-review-prompts">Findings are review prompts<a class="anchor" aria-label="anchor" href="#findings-are-review-prompts"></a>
 </h3>
-<p>The checks are broad heuristics intended to identify items worth
-reviewing. They do not establish clinical correctness, protocol
-compliance, or regulatory compliance. An <code>info</code> finding can
-still be important, and a report with no findings does not prove that
-the data are correct.</p>
-<p><code>finding_id</code> is assigned when a report is built and should
-not be treated as a persistent identifier across runs. Use issue and
-REDCap context columns when tracking findings externally.</p>
+<p>The checks identify items worth reviewing. They do not establish
+clinical correctness, protocol compliance, or regulatory compliance. An
+<code>info</code> finding can still be important, and a report with no
+findings does not prove that the data are correct.</p>
+<p><code>finding_id</code> is assigned when a report is built and is not
+persistent across runs. Use the issue and REDCap context columns when
+tracking findings externally.</p>
 </div>
 <div class="section level3">
 <h3 id="branching-logic-support-is-intentionally-bounded">Branching logic support is intentionally bounded<a class="anchor" aria-label="anchor" href="#branching-logic-support-is-intentionally-bounded"></a>
@@ -923,24 +1152,12 @@ REDCap context columns when tracking findings externally.</p>
 choice references, parentheses, and <code>and</code>/<code>or</code>
 combinations. A valid expression that evaluates to <code>NA</code> is
 treated as not shown for that row.</p>
-<p>REDCap functions, smart variables, and other expressions outside the
+<p>REDCap functions, smart variables, and expressions outside the
 supported subset are treated as applicable rather than used to hide a
 potentially required value. The report does not produce findings for
 apparently missing branching references because event-qualified fields,
 cross-form fields, and smart variables cannot be classified reliably
 from bracketed tokens alone.</p>
-</div>
-<div class="section level3">
-<h3 id="validation-and-outlier-checks-have-different-sources">Validation and outlier checks have different sources<a class="anchor" aria-label="anchor" href="#validation-and-outlier-checks-have-different-sources"></a>
-</h3>
-<p>Format and range findings enforce user-created
-<code>text_validation_*</code> metadata for text fields. The validation
-type determines how values and optional bounds are parsed. Unsupported
-or absent validation types do not produce format findings, and malformed
-values are not reported as range or future-date findings.</p>
-<p>IQR findings are separate distribution-based heuristics. They require
-at least four observed values and a nonzero IQR, and their usefulness
-depends on the field’s distribution and selected multiplier.</p>
 </div>
 <div class="section level3">
 <h3 id="counts-reflect-redcaps-row-structure">Counts reflect REDCap’s row structure<a class="anchor" aria-label="anchor" href="#counts-reflect-redcaps-row-structure"></a>
@@ -953,13 +1170,13 @@ records, <code>raw_row_count</code> counts exported rows, field
 measure that matches the question being asked.</p>
 </div>
 <div class="section level3">
-<h3 id="the-report-depends-on-current-redcap-structure">The report depends on current REDCap structure<a class="anchor" aria-label="anchor" href="#the-report-depends-on-current-redcap-structure"></a>
+<h3 id="results-reflect-the-current-project-export">Results reflect the current project export<a class="anchor" aria-label="anchor" href="#results-reflect-the-current-project-export"></a>
 </h3>
 <p>Descriptive fields are removed before analysis because they do not
 store record values. Structural metadata retrieval failures are reported
 as errors rather than silently converted to empty project structure.
-Results reflect the API records and metadata available when the report
-is built, including the token’s project access and export
+Results reflect the records and metadata available when the report is
+built, including the token’s project access and export
 configuration.</p>
 </div>
 </div>
