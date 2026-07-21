@@ -13,6 +13,8 @@ Build and view REDCap project codebooks.
 
 - [`build_codebook()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_codebook.md)
   : Build a REDCap codebook
+- [`save_codebook()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/save_codebook.md)
+  : Save a REDCap codebook viewer
 - [`view_codebook()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_codebook.md)
   : View a REDCap codebook as interactive HTML tables
 
