@@ -43,6 +43,7 @@ reference:
     Build and view REDCap project codebooks.
   contents:
   - build_codebook
+  - save_codebook
   - view_codebook
 - title: "Build Quality Reports"
   desc: >
