@@ -70,8 +70,8 @@ get_codebook <- function(project) {
 #' `view_codebook()` turns a `redcap_codebook` object from [build_codebook()]
 #' into a static HTML viewer with tab-style section navigation and one
 #' interactive table per codebook section. The returned object prints in the
-#' RStudio/Posit Viewer and can be saved as an HTML file with
-#' [htmltools::save_html()]. Event, event-instrument, and repeating-structure
+#' RStudio/Posit Viewer. Use [save_codebook()] to save an HTML file for sharing
+#' or email attachment. Event, event-instrument, and repeating-structure
 #' sections are omitted when those API tables are empty.
 #'
 #' @param codebook A `redcap_codebook` object returned by [build_codebook()].
@@ -88,7 +88,7 @@ get_codebook <- function(project) {
 #' )
 #'
 #' viewer <- view_codebook(codebook)
-#' htmltools::save_html(viewer, "codebook.html")
+#' save_codebook(codebook, "codebook.html")
 #' }
 #'
 #' @export
@@ -125,6 +125,46 @@ view_codebook <- function(codebook, page_length = 25) {
       )
     )
   )
+}
+
+#' @title Save a REDCap codebook viewer
+#'
+#' @description
+#' `save_codebook()` saves the interactive HTML viewer from [view_codebook()]
+#' to disk as a single HTML file. Local CSS and JavaScript dependencies are
+#' inlined so the file can be opened in a browser or attached to an email
+#' without a separate dependency folder.
+#'
+#' @param codebook A `redcap_codebook` object returned by [build_codebook()].
+#' @param file Output HTML file path.
+#' @param page_length Number of rows to show per interactive table page.
+#'
+#' @returns The output file path, invisibly.
+#'
+#' @examples
+#' \dontrun{
+#' codebook <- build_codebook(
+#'   redcap_uri = Sys.getenv("REDCAP_URI"),
+#'   token = Sys.getenv("REDCAP_TOKEN")
+#' )
+#'
+#' save_codebook(codebook, "codebook.html")
+#' }
+#'
+#' @export
+save_codebook <- function(
+  codebook,
+  file,
+  page_length = 25
+) {
+  get_validate_codebook(codebook)
+  get_validate_html_file(file)
+  get_validate_page_length(page_length)
+
+  viewer <- view_codebook(codebook, page_length = page_length)
+  get_save_codebook_single_file(viewer, file)
+
+  invisible(file)
 }
 
 pull_redcap_codebook <- function(redcap_uri, token) {
@@ -330,7 +370,11 @@ get_codebook_forms <- function(project) {
 
 get_codebook_project_summary <- function(project) {
   project_info <- project$project_info
-  project_title <- if ("project_title" %in% names(project_info) && nrow(project_info) > 0) {
+  has_title_col <- "project_title" %in% names(project_info)
+  has_info_rows <- nrow(project_info) > 0
+  has_project_title <- has_title_col && has_info_rows
+
+  project_title <- if (has_project_title) {
     as.character(project_info$project_title[[1]])
   } else {
     "Unknown REDCap project"
@@ -550,7 +594,12 @@ get_codebook_repeating_summary <- function(project) {
   }
 
   repeating_events <- if (
-    "redcap_event_name" %in% names(repeating) && all(c("redcap_event_name", "form_name") %in% names(project$event_instruments))
+    "redcap_event_name" %in%
+      names(repeating) &&
+      all(
+        c("redcap_event_name", "form_name") %in%
+          names(project$event_instruments)
+      )
   ) {
     event_rows <- if ("form_name" %in% names(repeating)) {
       repeating |> filter(get_is_missing(.data$form_name))
@@ -614,7 +663,10 @@ get_codebook_validation_label <- function(
 }
 
 get_codebook_event_count <- function(project) {
-  if (nrow(project$events) == 0 || !"redcap_event_name" %in% names(project$events)) {
+  if (
+    nrow(project$events) == 0 ||
+      !"redcap_event_name" %in% names(project$events)
+  ) {
     return(NA_integer_)
   }
 
@@ -646,6 +698,107 @@ get_validate_page_length <- function(page_length) {
   }
 
   invisible(NULL)
+}
+
+get_validate_html_file <- function(file) {
+  valid_file <- is.character(file) &&
+    length(file) == 1 &&
+    !is.na(file) &&
+    file != ""
+
+  if (!valid_file) {
+    cli_abort("{.arg file} must be a single non-empty HTML file path.")
+  }
+
+  parent_dir <- dirname(file)
+  if (!dir.exists(parent_dir)) {
+    cli_abort("The output directory for {.arg file} must already exist.")
+  }
+
+  invisible(NULL)
+}
+
+get_save_codebook_single_file <- function(viewer, file) {
+  temp_dir <- tempfile("redcap-codebook-save-")
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  temp_file <- file.path(temp_dir, basename(file))
+  save_html(viewer, file = temp_file, libdir = "lib")
+
+  html <- paste(readLines(temp_file, warn = FALSE), collapse = "\n")
+  html <- get_inline_html_styles(html, temp_dir)
+  html <- get_inline_html_scripts(html, temp_dir)
+
+  writeLines(html, file, useBytes = TRUE)
+  invisible(file)
+}
+
+get_inline_html_styles <- function(html, base_dir) {
+  get_inline_html_dependency(
+    html = html,
+    base_dir = base_dir,
+    pattern = "<link([^>]+)href=\"([^\"]+)\"([^>]*)>",
+    replacement = \(path, content) {
+      paste0(
+        "<style data-redcap-codebook-source=\"",
+        path,
+        "\">\n",
+        content,
+        "\n</style>"
+      )
+    }
+  )
+}
+
+get_inline_html_scripts <- function(html, base_dir) {
+  get_inline_html_dependency(
+    html = html,
+    base_dir = base_dir,
+    pattern = "<script([^>]*)src=\"([^\"]+)\"([^>]*)></script>",
+    replacement = \(path, content) {
+      paste0(
+        "<script data-redcap-codebook-source=\"",
+        path,
+        "\">\n",
+        content,
+        "\n</script>"
+      )
+    }
+  )
+}
+
+get_inline_html_dependency <- function(html, base_dir, pattern, replacement) {
+  matches <- gregexpr(pattern, html, perl = TRUE)
+  starts <- matches[[1]]
+  if (starts[[1]] == -1) {
+    return(html)
+  }
+
+  match_text <- regmatches(html, matches)[[1]]
+  paths <- map_chr(match_text, \(match) {
+    sub(pattern, "\\2", match, perl = TRUE)
+  })
+
+  for (index in rev(seq_along(match_text))) {
+    path <- paths[[index]]
+    local_file <- file.path(base_dir, path)
+    if (!file.exists(local_file)) {
+      next
+    }
+
+    content <- paste(readLines(local_file, warn = FALSE), collapse = "\n")
+    inline <- replacement(path, content)
+    start <- starts[[index]]
+    end <- start + attr(starts, "match.length")[[index]] - 1
+    html <- paste0(
+      substr(html, 1, start - 1),
+      inline,
+      substr(html, end + 1, nchar(html))
+    )
+  }
+
+  html
 }
 
 get_codebook_viewer_tables <- function(codebook) {

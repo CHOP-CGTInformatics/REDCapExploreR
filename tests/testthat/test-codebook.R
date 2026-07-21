@@ -605,3 +605,46 @@ test_that("view_codebook escapes REDCap metadata values as text", {
   expect_match(as.character(viewer), "&lt;script&gt;alert")
   expect_false(grepl("<script>alert", as.character(viewer), fixed = TRUE))
 })
+
+test_that("save_codebook validates inputs", {
+  metadata <- tibble::tibble(
+    field_name = "record_id",
+    form_name = "main",
+    field_type = "text",
+    field_label = "Record ID"
+  )
+  codebook <- build_mock_codebook(metadata)
+  output_file <- tempfile(fileext = ".html")
+
+  expect_error(save_codebook(tibble::tibble(), output_file), "redcap_codebook")
+  expect_error(save_codebook(codebook, ""), "file")
+  expect_error(
+    save_codebook(codebook, output_file, page_length = 0),
+    "page_length"
+  )
+})
+
+test_that("save_codebook writes a single HTML file with inlined dependencies", {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "status"),
+    form_name = c("main", "main"),
+    field_type = c("text", "dropdown"),
+    field_label = c("Record ID", "Status"),
+    select_choices_or_calculations = c(NA, "1, Open | 2, Closed")
+  )
+  project_info <- tibble::tibble(project_title = "Saved Codebook")
+  codebook <- build_mock_codebook(metadata, project_info = project_info)
+  output_dir <- tempdir()
+  output_file <- file.path(output_dir, "saved-codebook.html")
+
+  result <- save_codebook(codebook, output_file)
+
+  expect_equal(result, output_file)
+  expect_true(file.exists(output_file))
+  expect_false(dir.exists(file.path(output_dir, "saved-codebook_files")))
+  output <- paste(readLines(output_file, warn = FALSE), collapse = "\n")
+  expect_match(output, "Saved Codebook")
+  expect_match(output, "redcap-codebook-viewer")
+  expect_match(output, "data-redcap-codebook-source")
+  expect_false(grepl("saved-codebook_files", output, fixed = TRUE))
+})

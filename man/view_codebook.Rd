@@ -19,8 +19,8 @@ tables.
 \code{view_codebook()} turns a \code{redcap_codebook} object from \code{\link[=build_codebook]{build_codebook()}}
 into a static HTML viewer with tab-style section navigation and one
 interactive table per codebook section. The returned object prints in the
-RStudio/Posit Viewer and can be saved as an HTML file with
-\code{\link[htmltools:save_html]{htmltools::save_html()}}. Event, event-instrument, and repeating-structure
+RStudio/Posit Viewer. Use \code{\link[=save_codebook]{save_codebook()}} to save an HTML file for sharing
+or email attachment. Event, event-instrument, and repeating-structure
 sections are omitted when those API tables are empty.
 }
 \examples{
@@ -31,7 +31,7 @@ codebook <- build_codebook(
 )
 
 viewer <- view_codebook(codebook)
-htmltools::save_html(viewer, "codebook.html")
+save_codebook(codebook, "codebook.html")
 }
 
 }
