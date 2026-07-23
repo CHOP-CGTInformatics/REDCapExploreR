@@ -90,6 +90,12 @@ view_codebook(codebook)
 See the [`build_codebook()` reference](../reference/build_codebook.html) for
 output details and the available viewing options.
 
+To save a codebook output to HTML, simply use:
+
+```{r save-codebook, eval=FALSE}
+save_codebook(codebook, file = "path.html")
+```
+
 ## Record status dashboard
 
 `build_record_status_data()` summarizes REDCap form completion by record.
