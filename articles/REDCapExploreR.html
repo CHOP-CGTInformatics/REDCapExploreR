@@ -170,6 +170,9 @@ interactive HTML table:</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/view_codebook.html">view_codebook</a></span><span class="op">(</span><span class="va">codebook</span><span class="op">)</span></span></code></pre></div>
 <p>See the <a href="../reference/build_codebook.html"><code>build_codebook()</code>
 reference</a> for output details and the available viewing options.</p>
+<p>To save a codebook output to HTML, simply use:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/save_codebook.html">save_codebook</a></span><span class="op">(</span><span class="va">codebook</span>, file <span class="op">=</span> <span class="st">"path.html"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="record-status-dashboard">Record status dashboard<a class="anchor" aria-label="anchor" href="#record-status-dashboard"></a>
@@ -178,7 +181,7 @@ reference</a> for output details and the available viewing options.</p>
 completion by record. <code><a href="../reference/plot_record_status.html">plot_record_status()</a></code> converts that
 table into a ggplot heat map similar to the REDCap Record Status
 Dashboard.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">status_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_record_status_data.html">build_record_status_data</a></span><span class="op">(</span></span>
 <span>  redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>,</span>
 <span>  token <span class="op">=</span> <span class="va">token</span></span>
@@ -187,7 +190,7 @@ Dashboard.</p>
 <span><span class="fu"><a href="../reference/plot_record_status.html">plot_record_status</a></span><span class="op">(</span><span class="va">status_data</span><span class="op">)</span></span></code></pre></div>
 <p>The synthetic <code>mock_record_status_data</code> can be plotted
 directly:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_record_status.html">plot_record_status</a></span><span class="op">(</span><span class="va">mock_record_status_data</span><span class="op">)</span></span></code></pre></div>
 <p><img src="REDCapExploreR_files/figure-html/record-status-mock-1.png" class="r-plt" alt="Synthetic REDCap record status dashboard heat map." width="700"></p>
 <p>See the <a href="../reference/plot_record_status.html"><code>plot_record_status()</code>
@@ -199,7 +202,7 @@ reference</a> for compact mode and display customization.</p>
 <p><code><a href="../reference/build_quality_report.html">build_quality_report()</a></code> retrieves records and project
 structure, runs general data quality checks, and returns findings,
 summaries, and standardized metadata.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">report</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_quality_report.html">build_quality_report</a></span><span class="op">(</span></span>
 <span>  redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>,</span>
 <span>  token <span class="op">=</span> <span class="va">token</span></span>
@@ -210,7 +213,7 @@ summaries, and standardized metadata.</p>
 <span><span class="va">report</span><span class="op">$</span><span class="va">findings</span></span></code></pre></div>
 <p>Use <code>mock_quality_report</code> to explore the report structure
 and example findings:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mock_quality_report</span></span>
 <span><span class="co">#&gt; &lt;REDCap quality report&gt;</span></span>
 <span><span class="co">#&gt; Records: 3</span></span>
@@ -246,7 +249,7 @@ assumptions.</p>
 <p><code><a href="../reference/pull_redcap_project.html">pull_redcap_project()</a></code> retrieves the record and
 structural metadata tables used by the quality-report workflow. Use it
 when a custom analysis needs the underlying API responses directly.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">project</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/pull_redcap_project.html">pull_redcap_project</a></span><span class="op">(</span></span>
 <span>  redcap_uri <span class="op">=</span> <span class="va">redcap_uri</span>,</span>
 <span>  token <span class="op">=</span> <span class="va">token</span></span>
@@ -255,7 +258,7 @@ when a custom analysis needs the underlying API responses directly.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">project</span><span class="op">)</span></span></code></pre></div>
 <p><code>mock_redcap_project</code> has the same top-level
 structure:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">mock_redcap_project</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "data"                  "metadata"              "events"               </span></span>
 <span><span class="co">#&gt; [4] "event_instruments"     "instruments"           "repeating_instruments"</span></span>

@@ -99,6 +99,13 @@ See the [`build_codebook()`
 reference](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_codebook.md)
 for output details and the available viewing options.
 
+To save a codebook output to HTML, simply use:
+
+``` r
+
+save_codebook(codebook, file = "path.html")
+```
+
 ## Record status dashboard
 
 [`build_record_status_data()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_record_status_data.md)
