@@ -136,6 +136,14 @@ report$summaries$project
 report$findings
 ```
 
+Use `view_quality_report()` to review the same object as interactive HTML, or
+save a single-file viewer for sharing:
+
+```{r quality-report-viewer, eval=FALSE}
+view_quality_report(report)
+save_quality_report(report, "quality-report.html")
+```
+
 Use `mock_quality_report` to explore the report structure and example findings:
 
 ```{r quality-report-mock}

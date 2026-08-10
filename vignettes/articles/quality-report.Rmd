@@ -116,6 +116,15 @@ mock_quality_report$findings |>
   dplyr::count(check, issue, severity, sort = TRUE)
 ```
 
+For an interactive review, pass the report object directly to the HTML viewer.
+The saved output is a single file containing overview metrics, findings,
+summaries, and metadata reference tables.
+
+```{r quality-report-html, eval=FALSE}
+view_quality_report(mock_quality_report)
+save_quality_report(mock_quality_report, "quality-report.html")
+```
+
 ### Review actionable findings
 
 Use `scope` to separate record-field findings from field-level metadata and

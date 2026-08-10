@@ -1,0 +1,242 @@
+.redcap-quality-report-viewer {
+  background: #f6f8fa;
+  color: #24292f;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.4;
+  margin: 0;
+  min-height: 100vh;
+  padding: 1.25rem;
+}
+
+.redcap-quality-report-header {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.redcap-quality-report-header h1 { margin-bottom: 0.25rem; }
+
+.redcap-quality-report-subtitle {
+  color: #57606a;
+  margin: 0;
+}
+
+.redcap-quality-report-intro {
+  margin-bottom: 0;
+  max-width: 72rem;
+}
+
+.redcap-quality-report-nav {
+  margin-bottom: 1rem;
+}
+
+.redcap-quality-report-primary-nav {
+  background: #f6f8fa;
+  border-bottom: 1px solid #d8dee4;
+  margin: 0 -1.25rem 1rem;
+  padding: 0 1.25rem 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.redcap-quality-report-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.redcap-quality-report-tab {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  color: #24292f;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.9rem;
+  gap: 0.4rem;
+  padding: 0.4rem 0.65rem;
+}
+
+.redcap-quality-report-tab.is-active {
+  background: #0969da;
+  border-color: #0969da;
+  color: #fff;
+}
+
+.redcap-quality-report-secondary-nav .redcap-quality-report-tab.is-active {
+  background: #57606a;
+  border-color: #57606a;
+}
+
+.redcap-quality-report-tab-count,
+.redcap-quality-report-section-count {
+  background: #eaeef2;
+  border-radius: 999px;
+  color: #57606a;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+}
+
+.redcap-quality-report-tab.is-active .redcap-quality-report-tab-count {
+  background: rgb(255 255 255 / 18%);
+  color: #fff;
+}
+
+.redcap-quality-report-primary-section,
+.redcap-quality-report-table-section {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
+  width: 100%;
+}
+
+.redcap-quality-report-primary-section.is-active,
+.redcap-quality-report-table-section.is-active {
+  height: auto;
+  opacity: 1;
+  overflow: visible;
+  pointer-events: auto;
+  position: static;
+  visibility: visible;
+}
+
+.redcap-quality-report-section-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.redcap-quality-report-section-header h2,
+.redcap-quality-report-section-header h3 {
+  margin: 0 0 0.3rem;
+}
+
+.redcap-quality-report-description {
+  color: #57606a;
+  margin: 0;
+  max-width: 72rem;
+}
+
+.redcap-quality-report-summary {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: 0 0 1rem;
+}
+
+.redcap-quality-report-summary-item {
+  background: #fff;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.redcap-quality-report-summary-item dt {
+  color: #57606a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+  text-transform: uppercase;
+}
+
+.redcap-quality-report-summary-item dd {
+  font-size: 1.25rem;
+  font-weight: 650;
+  margin: 0;
+}
+
+.redcap-quality-report-details {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.redcap-quality-report-details h3 { margin-top: 0; }
+
+.redcap-quality-report-details dl {
+  display: grid;
+  gap: 0.35rem 1rem;
+  grid-template-columns: max-content 1fr;
+  margin-bottom: 0;
+}
+
+.redcap-quality-report-details dt { color: #57606a; }
+.redcap-quality-report-details dd { margin: 0; }
+
+.redcap-quality-report-table-panel {
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  overflow-x: auto;
+  padding: 0.75rem;
+}
+
+.redcap-quality-report-empty {
+  color: #57606a;
+  font-style: italic;
+  margin: 0;
+}
+
+.redcap-quality-report-table { font-size: 0.86rem; }
+
+.redcap-quality-report-table thead th {
+  background: #f6f8fa;
+  border-bottom-color: #d0d7de;
+  color: #24292f;
+}
+
+.redcap-quality-report-table tbody td { vertical-align: top; }
+.redcap-quality-report-table tbody tr { cursor: pointer; }
+
+.redcap-quality-report-table tbody tr.redcap-quality-report-row-selected td {
+  background-color: #fff8c5 !important;
+}
+
+.redcap-quality-report-table-panel .dataTables_wrapper { color: #24292f; }
+
+.redcap-quality-report-table-panel .dataTables_filter input,
+.redcap-quality-report-table-panel .dataTables_length select,
+.redcap-quality-report-table-panel thead input {
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  padding: 0.2rem 0.35rem;
+}
+
+.redcap-quality-report-table-panel .dataTables_info,
+.redcap-quality-report-table-panel .dataTables_paginate {
+  color: #57606a;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .redcap-quality-report-viewer { padding: 0.75rem; }
+
+  .redcap-quality-report-primary-nav {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .redcap-quality-report-section-header { display: block; }
+
+  .redcap-quality-report-section-count {
+    display: inline-block;
+    margin-top: 0.5rem;
+  }
+}

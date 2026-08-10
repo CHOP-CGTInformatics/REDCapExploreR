@@ -50,6 +50,8 @@ reference:
     Build exploratory REDCap data quality reports.
   contents:
   - build_quality_report
+  - view_quality_report
+  - save_quality_report
 - title: "Record Status Dashboard"
   desc: >
     Recreate and plot REDCap Record Status Dashboard data.
