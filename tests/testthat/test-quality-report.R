@@ -332,7 +332,8 @@ test_that("build_quality_report returns expected findings and summaries for API 
       "validation",
       "branching",
       "record_id_field",
-      "source"
+      "source",
+      "settings"
     )
   )
 

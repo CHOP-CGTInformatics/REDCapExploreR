@@ -52,61 +52,27 @@ get_standard_repeating_instruments <- function(repeating_instruments) {
     )
 }
 
-#' Determine whether a form is configured as a repeating instrument
+#' @title Identify rows belonging to an event and instrument
 #'
-#' @param project A normalized API project.
-#' @param form_name REDCap form name.
-#'
-#' @returns `TRUE` when `form_name` appears in repeating configuration.
-#'
+#' @description Resolves repeating configuration separately for each event.
+#' @param project A normalized REDCap project.
+#' @param form_name REDCap instrument name.
+#' @returns One logical structural membership value per exported row.
 #' @noRd
-get_is_repeating_form <- function(project, form_name) {
-  any(
-    !get_is_missing(project$repeating_instruments$form_name) &
-      project$repeating_instruments$form_name == form_name
-  )
-}
-
-#' Identify exported rows for configured repeating instruments
-#'
-#' @description
-#' Repeating configuration comes from `redcap_instrument_repeating()`. The
-#' exported repeat instrument column is used only to associate data rows with
-#' that configuration.
-#'
-#' @inheritParams get_is_repeating_form
-#'
-#' @returns A logical vector with one value per API data row.
-#'
-#' @noRd
-get_repeating_instrument_rows <- function(project) {
-  if (
-    !any(!get_is_missing(project$repeating_instruments$form_name)) ||
-      !"redcap_repeat_instrument" %in% names(project$data)
-  ) {
-    return(rep(FALSE, nrow(project$data)))
+get_structural_form_rows <- function(project, form_name) {
+  configuration <- project$repeating_instruments
+  configuration <- configuration[
+    !get_is_missing(configuration$form_name) & configuration$form_name == form_name, ,
+    drop = FALSE
+  ]
+  events <- get_event_values(project$data, rep(TRUE, nrow(project$data)))
+  repeating <- if (all(is.na(events)) || all(get_is_missing(configuration$redcap_event_name))) {
+    rep(nrow(configuration) > 0, nrow(project$data))
+  } else {
+    events %in% configuration$redcap_event_name
   }
-
-  !get_is_missing(project$data$redcap_repeat_instrument)
-}
-
-#' Identify exported rows for one configured repeating instrument
-#'
-#' @inheritParams get_is_repeating_form
-#'
-#' @returns A logical vector with one value per API data row.
-#'
-#' @noRd
-get_matching_repeat_rows <- function(project, form_name) {
-  if (!get_is_repeating_form(project, form_name)) {
-    return(rep(FALSE, nrow(project$data)))
-  }
-
-  repeating_rows <- get_repeating_instrument_rows(project)
-  if (!any(repeating_rows)) {
-    return(repeating_rows)
-  }
-
-  repeating_rows &
-    as.character(project$data$redcap_repeat_instrument) == form_name
+  instruments <- get_repeat_instrument_values(project$data, rep(TRUE, nrow(project$data)))
+  rows <- (repeating & !get_is_missing(instruments) & instruments == form_name) |
+    (!repeating & get_is_missing(instruments))
+  rows & get_event_form_enabled_rows(project, form_name)
 }

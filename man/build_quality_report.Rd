@@ -54,6 +54,9 @@ REDCap form status column \verb{<form_name>_complete} is \code{1}/Unverified or
 does not contribute to missingness. Checkbox parent fields are observed
 when their choice exports contain explicit values, including an all-zero
 no-selection state; only an all-missing set of choice exports is missing.
+\code{metadata$settings} records the selected checks, thresholds, evaluation date,
+and package version. Field \code{record_count} means assessed rows; record-level
+\code{missing_field_count} counts missing values across events and instances.
 Branching expressions that use unsupported REDCap functions or smart
 variables are treated as applicable so required values remain reviewable.
 }

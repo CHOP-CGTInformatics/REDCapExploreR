@@ -29,7 +29,8 @@ get_parsed_validation_values <- function(value, validation) {
     }
 
     parsed <- rep(NA_real_, length(value))
-    parsed[valid] <- as.numeric(value[valid])
+    parsed[valid] <- suppressWarnings(as.numeric(value[valid]))
+    parsed[!is.finite(parsed)] <- NA_real_
     return(parsed)
   }
 

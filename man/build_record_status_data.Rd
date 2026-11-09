@@ -48,7 +48,8 @@ The record identifier column uses the REDCap project's record ID field name,
 so a project with \code{infseq_id} as the record ID field returns an \code{infseq_id}
 column. \code{form_name} is a factor ordered by REDCap event and instrument order.
 In longitudinal projects, \code{form_name} uses \code{"Event Label : Form Label"} when
-labels are available.
+labels are available. Colliding display labels are disambiguated with the
+unique event and instrument names.
 }
 \examples{
 \dontrun{

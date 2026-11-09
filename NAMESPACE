@@ -10,78 +10,99 @@ export(pull_redcap_project)
 export(save_codebook)
 export(view_codebook)
 importFrom(DT,datatable)
-importFrom(REDCapR,redcap_arm_export)
-importFrom(REDCapR,redcap_event_instruments)
-importFrom(REDCapR,redcap_event_read)
-importFrom(REDCapR,redcap_instrument_repeating)
-importFrom(REDCapR,redcap_instruments)
-importFrom(REDCapR,redcap_metadata_read)
-importFrom(REDCapR,redcap_project_info_read)
-importFrom(REDCapR,redcap_read_oneshot)
-importFrom(cli,cli_abort)
-importFrom(cli,cli_progress_bar)
-importFrom(cli,cli_progress_done)
-importFrom(cli,cli_progress_update)
-importFrom(cli,cli_warn)
-importFrom(cli,symbol)
-importFrom(dplyr,across)
-importFrom(dplyr,arrange)
-importFrom(dplyr,bind_rows)
-importFrom(dplyr,case_when)
-importFrom(dplyr,count)
-importFrom(dplyr,cross_join)
-importFrom(dplyr,distinct)
-importFrom(dplyr,filter)
-importFrom(dplyr,group_by)
-importFrom(dplyr,if_else)
-importFrom(dplyr,left_join)
-importFrom(dplyr,mutate)
-importFrom(dplyr,n)
-importFrom(dplyr,n_distinct)
-importFrom(dplyr,pull)
-importFrom(dplyr,relocate)
-importFrom(dplyr,rename)
-importFrom(dplyr,right_join)
-importFrom(dplyr,row_number)
-importFrom(dplyr,select)
-importFrom(dplyr,slice)
-importFrom(dplyr,summarise)
-importFrom(dplyr,transmute)
-importFrom(ggplot2,aes)
-importFrom(ggplot2,element_blank)
-importFrom(ggplot2,element_text)
-importFrom(ggplot2,geom_tile)
-importFrom(ggplot2,ggplot)
-importFrom(ggplot2,labs)
-importFrom(ggplot2,scale_fill_gradientn)
-importFrom(ggplot2,scale_x_discrete)
-importFrom(ggplot2,scale_y_discrete)
-importFrom(ggplot2,theme)
-importFrom(ggplot2,theme_minimal)
-importFrom(htmltools,HTML)
-importFrom(htmltools,browsable)
-importFrom(htmltools,htmlDependency)
-importFrom(htmltools,save_html)
-importFrom(htmltools,tagList)
-importFrom(htmltools,tags)
-importFrom(purrr,flatten_chr)
-importFrom(purrr,map)
-importFrom(purrr,map_chr)
-importFrom(purrr,map_dbl)
-importFrom(purrr,map_lgl)
-importFrom(rlang,"!!!")
-importFrom(rlang,":=")
-importFrom(rlang,.data)
-importFrom(rlang,.env)
-importFrom(stats,IQR)
-importFrom(stats,quantile)
-importFrom(stats,setNames)
-importFrom(stringr,str_detect)
-importFrom(stringr,str_squish)
-importFrom(stringr,str_trim)
-importFrom(stringr,str_trunc)
-importFrom(tibble,as_tibble)
-importFrom(tibble,tibble)
-importFrom(tidyselect,all_of)
-importFrom(tidyselect,any_of)
-importFrom(tidyselect,everything)
+importFrom(REDCapR,
+  redcap_arm_export,
+  redcap_event_instruments,
+  redcap_event_read,
+  redcap_instrument_repeating,
+  redcap_instruments,
+  redcap_metadata_read,
+  redcap_project_info_read,
+  redcap_read_oneshot
+)
+importFrom(cli,
+  cli_abort,
+  cli_progress_bar,
+  cli_progress_done,
+  cli_progress_update,
+  cli_warn,
+  symbol
+)
+importFrom(dplyr,
+  across,
+  arrange,
+  bind_rows,
+  case_when,
+  count,
+  cross_join,
+  distinct,
+  filter,
+  group_by,
+  if_else,
+  left_join,
+  mutate,
+  n,
+  n_distinct,
+  pull,
+  relocate,
+  rename,
+  right_join,
+  row_number,
+  select,
+  slice,
+  summarise,
+  transmute
+)
+importFrom(ggplot2,
+  aes,
+  element_blank,
+  element_text,
+  geom_tile,
+  ggplot,
+  labs,
+  scale_fill_gradientn,
+  scale_x_discrete,
+  scale_y_discrete,
+  theme,
+  theme_minimal
+)
+importFrom(htmltools,
+  HTML,
+  browsable,
+  htmlDependency,
+  save_html,
+  tagList,
+  tags
+)
+importFrom(purrr,
+  flatten_chr,
+  map,
+  map_chr,
+  map_dbl,
+  map_lgl
+)
+importFrom(rlang,
+  "!!!",
+  ":=",
+  .data,
+  .env
+)
+importFrom(stats,
+  quantile,
+  setNames
+)
+importFrom(stringr,
+  str_detect,
+  str_squish,
+  str_trim,
+  str_trunc
+)
+importFrom(tibble,
+  as_tibble,
+  tibble
+)
+importFrom(tidyselect,
+  all_of,
+  any_of,
+  everything
+)

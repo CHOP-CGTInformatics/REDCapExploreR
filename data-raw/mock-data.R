@@ -243,7 +243,8 @@ mock_quality_report <- mock_redcap_project |>
       "consistency"
     ),
     sparse_threshold = 0.95,
-    outlier_iqr_multiplier = 3
+    outlier_iqr_multiplier = 3,
+    evaluation_date = as.Date("2026-11-09")
   )
 
 usethis::use_data(

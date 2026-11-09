@@ -260,7 +260,7 @@ test_that("plot_record_status returns a ggplot heat map", {
   expect_s3_class(plot, "ggplot")
   expect_equal(plot$labels$x, "REDCap Form")
   expect_equal(plot$labels$y, "Record ID")
-  expect_equal(plot$labels$fill, "Completion Status")
+  expect_equal(plot$labels$fill, "Instances marked complete (%)")
 })
 
 test_that("plot_record_status supports explicit record ID columns", {

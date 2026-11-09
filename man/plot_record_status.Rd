@@ -16,7 +16,7 @@ plot_record_status(
   tile_linewidth = NULL,
   x_label = "REDCap Form",
   y_label = "Record ID",
-  fill_label = "Completion Status",
+  fill_label = "Instances marked complete (\%)",
   rotate_x_text = TRUE,
   x_text_size = NULL,
   y_text_size = NULL,
@@ -87,7 +87,9 @@ data columns when possible. For longitudinal output, \code{event_name} is ignore
 because event labels are already included in \code{form_name}.
 
 \code{pct_complete} should range from \code{0} to \code{1}, where \code{1} is complete and \code{0} is
-incomplete or unverified. Missing values are shown with \code{missing_color}.
+incomplete or unverified. For repeating forms, the denominator includes only
+instances with an exported status; blank statuses are excluded. Missing tiles
+are shown with \code{missing_color}.
 }
 \examples{
 plot_record_status(mock_record_status_data)

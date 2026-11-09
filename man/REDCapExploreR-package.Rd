@@ -22,5 +22,10 @@ Useful links:
 \author{
 \strong{Maintainer}: Richard Hanna \email{hannar1@chop.edu} (\href{https://orcid.org/0009-0005-6496-8154}{ORCID})
 
+Authors:
+\itemize{
+  \item Richard Hanna \email{hannar1@chop.edu} (\href{https://orcid.org/0009-0005-6496-8154}{ORCID})
+}
+
 }
 \keyword{internal}
