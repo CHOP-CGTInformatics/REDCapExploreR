@@ -36,7 +36,6 @@ build_codebook <- function(redcap_uri, token) {
   if (missing(redcap_uri)) {
     cli_abort("{.arg redcap_uri} and {.arg token} are required.")
   }
-  get_validate_api_credentials(redcap_uri, token)
 
   project <- get_codebook_project(
     pull_redcap_codebook(
@@ -49,10 +48,12 @@ build_codebook <- function(redcap_uri, token) {
 }
 
 get_codebook <- function(project) {
+  forms <- get_project_forms(project)
+  choices <- get_codebook_choices(project)
   codebook <- list(
-    fields = get_codebook_fields(project),
-    choices = get_codebook_choices(project),
-    forms = get_codebook_forms(project),
+    fields = get_codebook_fields(project, forms, choices),
+    choices = choices,
+    forms = forms,
     events = project$events,
     event_instruments = project$event_instruments,
     repeating = project$repeating_instruments |>
@@ -113,7 +114,7 @@ view_codebook <- function(codebook, page_length = 25) {
             class = "redcap-codebook-intro",
             paste(
               "Review this project's fields, forms, choices, events, and",
-              "repeat settings using the section tabs below. Each table can",
+              "repeat settings using the section tabs below. Metadata tables can",
               "be searched, sorted, paged, and scrolled horizontally for",
               "wide metadata."
             )
@@ -157,64 +158,12 @@ save_codebook <- function(
   file,
   page_length = 25
 ) {
-  get_validate_codebook(codebook)
   get_validate_html_file(file)
-  get_validate_page_length(page_length)
 
   viewer <- view_codebook(codebook, page_length = page_length)
   get_save_codebook_single_file(viewer, file)
 
   invisible(file)
-}
-
-pull_redcap_codebook <- function(redcap_uri, token) {
-  get_validate_api_credentials(redcap_uri, token)
-
-  metadata_result <- redcap_metadata_read(
-    redcap_uri = redcap_uri,
-    token = token,
-    verbose = FALSE
-  )
-
-  list(
-    metadata = get_redcapr_data(metadata_result, "metadata"),
-    events = get_optional_redcapr_data(
-      redcap_event_read,
-      redcap_uri,
-      token,
-      "event metadata"
-    ),
-    event_instruments = get_optional_redcapr_data(
-      redcap_event_instruments,
-      redcap_uri,
-      token,
-      "event-instrument metadata"
-    ),
-    instruments = get_optional_redcapr_data(
-      redcap_instruments,
-      redcap_uri,
-      token,
-      "instrument metadata"
-    ),
-    repeating_instruments = get_optional_redcapr_data(
-      redcap_instrument_repeating,
-      redcap_uri,
-      token,
-      "repeating-instrument metadata"
-    ),
-    arms = get_optional_redcapr_data(
-      redcap_arm_export,
-      redcap_uri,
-      token,
-      "arm metadata"
-    ),
-    project_info = get_optional_redcapr_data(
-      redcap_project_info_read,
-      redcap_uri,
-      token,
-      "project metadata"
-    )
-  )
 }
 
 #' @export
@@ -247,7 +196,7 @@ get_codebook_project <- function(project) {
     event_instruments = get_standard_event_instruments(
       project$event_instruments
     ),
-    instruments = get_codebook_instruments(project$instruments),
+    instruments = get_standard_instruments(project$instruments),
     repeating_instruments = get_standard_repeating_instruments(
       project$repeating_instruments
     ),
@@ -257,12 +206,10 @@ get_codebook_project <- function(project) {
   )
 }
 
-get_codebook_fields <- function(project) {
+get_codebook_fields <- function(project, forms, choices) {
   metadata <- project$metadata |>
     mutate(field_order = row_number())
 
-  forms <- get_codebook_forms(project)
-  choices <- get_codebook_choices(project)
   event_summary <- get_codebook_event_summary(project)
   repeating_summary <- get_codebook_repeating_summary(project)
 
@@ -280,7 +227,6 @@ get_codebook_fields <- function(project) {
     left_join(repeating_summary, by = "form_name") |>
     mutate(
       choice_count = if_else(is.na(.data$choice_count), 0L, .data$choice_count),
-      choices = if_else(is.na(.data$choices), NA_character_, .data$choices),
       validation = get_codebook_validation_label(
         .data$text_validation_type_or_show_slider_number,
         .data$text_validation_min,
@@ -291,11 +237,6 @@ get_codebook_fields <- function(project) {
       descriptive_field = tolower(as.character(.data$field_type)) %in%
         c("descriptive", "descriptive_text"),
       event_count = if_else(is.na(.data$event_count), 0L, .data$event_count),
-      event_names = if_else(
-        is.na(.data$event_names),
-        NA_character_,
-        .data$event_names
-      ),
       repeating_status = if_else(
         is.na(.data$repeating_status),
         "Not repeating",
@@ -340,34 +281,6 @@ get_codebook_choices <- function(project) {
   get_choice_rows(metadata)
 }
 
-get_codebook_forms <- function(project) {
-  forms <- project$metadata |>
-    distinct(.data$form_name) |>
-    mutate(form_order = row_number())
-
-  if (nrow(project$instruments) > 0) {
-    forms <- forms |>
-      left_join(project$instruments, by = "form_name")
-  } else {
-    forms$form_label <- NA_character_
-  }
-
-  forms |>
-    mutate(
-      form_label = if_else(
-        get_is_missing(.data$form_label),
-        .data$form_name,
-        .data$form_label
-      )
-    ) |>
-    left_join(
-      project$metadata |>
-        count(.data$form_name, name = "field_count"),
-      by = "form_name"
-    ) |>
-    select("form_order", "form_name", "form_label", "field_count")
-}
-
 get_codebook_project_summary <- function(project) {
   project_info <- project$project_info
   has_title_col <- "project_title" %in% names(project_info)
@@ -386,7 +299,7 @@ get_codebook_project_summary <- function(project) {
     field_count = n_distinct(project$metadata$field_name),
     form_count = n_distinct(project$metadata$form_name),
     event_count = get_codebook_event_count(project),
-    repeating_enabled = get_codebook_repeating_enabled(project),
+    repeating_enabled = get_repeating_enabled(project),
     creation_time = get_project_info_value(
       project_info,
       "creation_time"
@@ -482,40 +395,6 @@ get_project_info_value <- function(project_info, field_name) {
   }
 
   project_info[[field_name]][[1]]
-}
-
-get_codebook_instruments <- function(instruments) {
-  instruments <- get_optional_api_table(instruments)
-  if (nrow(instruments) == 0 && ncol(instruments) == 0) {
-    return(tibble(form_name = character(), form_label = character()))
-  }
-
-  names(instruments) <- get_clean_names(names(instruments))
-
-  form_column <- intersect(
-    c("instrument_name", "form_name", "instrument"),
-    names(instruments)
-  )
-  label_column <- intersect(
-    c("instrument_label", "form_label", "label"),
-    names(instruments)
-  )
-
-  if (length(form_column) == 0) {
-    return(tibble(form_name = character(), form_label = character()))
-  }
-
-  out <- instruments |>
-    transmute(form_name = as.character(.data[[form_column[[1]]]]))
-
-  out$form_label <- if (length(label_column) == 0) {
-    NA_character_
-  } else {
-    as.character(instruments[[label_column[[1]]]])
-  }
-
-  out |>
-    distinct(.data$form_name, .keep_all = TRUE)
 }
 
 get_codebook_arms <- function(arms) {
@@ -673,11 +552,6 @@ get_codebook_event_count <- function(project) {
   n_distinct(project$events$redcap_event_name)
 }
 
-get_codebook_repeating_enabled <- function(project) {
-  repeating <- project$repeating_instruments
-  nrow(repeating) > 0
-}
-
 get_validate_codebook <- function(codebook) {
   if (!inherits(codebook, "redcap_codebook")) {
     cli_abort("{.arg codebook} must be a {.cls redcap_codebook} object.")
@@ -690,6 +564,8 @@ get_validate_page_length <- function(page_length) {
   valid_page_length <- is.numeric(page_length) &&
     length(page_length) == 1 &&
     !is.na(page_length) &&
+    is.finite(page_length) &&
+    page_length <= .Machine$integer.max &&
     page_length > 0 &&
     page_length == as.integer(page_length)
 
@@ -1099,8 +975,7 @@ get_codebook_viewer_row_label <- function(data) {
 }
 
 get_codebook_empty_message <- function(section_id) {
-  switch(
-    section_id,
+  switch(section_id,
     choices = "No coded choice options were found in this project.",
     "No rows are available for this section."
   )

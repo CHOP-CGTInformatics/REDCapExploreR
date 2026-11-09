@@ -117,6 +117,12 @@ The synthetic `mock_record_status_data` can be plotted directly:
 plot_record_status(mock_record_status_data)
 ```
 
+The legend shows the percentage of instances marked complete among instances
+with an exported status. Blank statuses are excluded from that denominator and
+appear as missing tiles when no status is available. Repeating behavior is
+resolved per event and instrument. Duplicate display labels include identifiers
+to keep their tiles distinct, including across arms.
+
 See the [`plot_record_status()` reference](../reference/plot_record_status.html)
 for compact mode and display customization.
 

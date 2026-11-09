@@ -30,7 +30,8 @@ test_that("mock quality report reflects current quality-report logic", {
         "consistency"
       ),
       sparse_threshold = 0.95,
-      outlier_iqr_multiplier = 3
+      outlier_iqr_multiplier = 3,
+      evaluation_date = mock_quality_report$metadata$settings$evaluation_date
     ),
     mock_quality_report
   )

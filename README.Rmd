@@ -55,6 +55,10 @@ codebook <- build_codebook(redcap_uri = redcap_uri, token = token)
 quality_report <- build_quality_report(redcap_uri = redcap_uri, token = token)
 ```
 
+Quality reports include selected checks, thresholds, evaluation date, and
+package version in `quality_report$metadata$settings`. Their printed overview
+also states how many field-row values were eligible for missingness assessment.
+
 The package includes `mock_redcap_project`, `mock_record_status_data`,
 `mock_codebook`, and `mock_quality_report` for offline exploration. See [Get
 Started](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/REDCapExploreR.html)

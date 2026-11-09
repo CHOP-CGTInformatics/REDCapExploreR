@@ -31,7 +31,8 @@
 #' so a project with `infseq_id` as the record ID field returns an `infseq_id`
 #' column. `form_name` is a factor ordered by REDCap event and instrument order.
 #' In longitudinal projects, `form_name` uses `"Event Label : Form Label"` when
-#' labels are available.
+#' labels are available. Colliding display labels are disambiguated with the
+#' unique event and instrument names.
 #'
 #' @param redcap_uri REDCap API URI.
 #' @param token REDCap API token.
@@ -54,7 +55,6 @@ build_record_status_data <- function(redcap_uri, token) {
   if (missing(redcap_uri)) {
     cli_abort("{.arg redcap_uri} and {.arg token} are required.")
   }
-  get_validate_api_credentials(redcap_uri, token)
 
   project <- get_quality_project(
     redcap_uri = redcap_uri,
@@ -78,6 +78,7 @@ build_record_status_data <- function(redcap_uri, token) {
 get_record_status_tiles <- function(project) {
   dashboard_grid <- get_dashboard_grid(project)
   completion_summary <- get_dashboard_status_summary(project)
+  dashboard_grid <- get_dashboard_display_names(dashboard_grid)
 
   out <- dashboard_grid |>
     left_join(
@@ -124,7 +125,7 @@ get_record_status_tiles <- function(project) {
 #'
 #' @noRd
 get_dashboard_grid <- function(project) {
-  forms <- get_dashboard_forms(project)
+  forms <- get_project_forms(project)
   record_events <- get_dashboard_record_events(project)
 
   if (nrow(record_events) == 0 || nrow(forms) == 0) {
@@ -168,74 +169,6 @@ get_empty_dashboard_grid <- function() {
   )
 }
 
-#' Get dashboard forms in REDCap instrument order
-#'
-#' @inheritParams get_record_status_tiles
-#'
-#' @returns A tibble with form names, display labels, and form order.
-#'
-#' @noRd
-get_dashboard_forms <- function(project) {
-  forms <- project$metadata |>
-    distinct(.data$form_name) |>
-    mutate(form_order = row_number())
-
-  instruments <- get_dashboard_instruments(project)
-  if (nrow(instruments) > 0) {
-    forms <- forms |>
-      left_join(instruments, by = "form_name")
-  } else {
-    forms$form_label <- NA_character_
-  }
-
-  forms |>
-    mutate(
-      form_label = if_else(
-        get_is_missing(.data$form_label),
-        .data$form_name,
-        .data$form_label
-      )
-    ) |>
-    arrange(.data$form_order) |>
-    select("form_name", "form_label", "form_order")
-}
-
-#' Normalize REDCap instrument labels for dashboard display
-#'
-#' @inheritParams get_record_status_tiles
-#'
-#' @returns A tibble with `form_name` and `form_label`.
-#'
-#' @noRd
-get_dashboard_instruments <- function(project) {
-  instruments <- get_optional_api_table(project$instruments)
-  if (nrow(instruments) == 0 && ncol(instruments) == 0) {
-    return(tibble(form_name = character(), form_label = character()))
-  }
-
-  names(instruments) <- get_clean_names(names(instruments))
-
-  form_column <- intersect(
-    c("instrument_name", "form_name", "form"),
-    names(instruments)
-  )
-  label_column <- intersect(
-    c("instrument_label", "form_label", "label"),
-    names(instruments)
-  )
-
-  if (length(form_column) == 0 || length(label_column) == 0) {
-    return(tibble(form_name = character(), form_label = character()))
-  }
-
-  instruments |>
-    transmute(
-      form_name = as.character(.data[[form_column[[1]]]]),
-      form_label = as.character(.data[[label_column[[1]]]])
-    ) |>
-    distinct(.data$form_name, .keep_all = TRUE)
-}
-
 #' Get observed record/event pairs
 #'
 #' @description
@@ -265,7 +198,7 @@ get_dashboard_record_events <- function(project) {
 #' Get event/form combinations enabled for dashboard display
 #'
 #' @inheritParams get_record_status_tiles
-#' @param forms Dashboard form metadata from `get_dashboard_forms()`.
+#' @param forms Dashboard form metadata from `get_project_forms()`.
 #'
 #' @returns A tibble with event and form display metadata.
 #'
@@ -387,7 +320,7 @@ get_dashboard_event_labels <- function(project) {
 #'
 #' @noRd
 get_dashboard_status_summary <- function(project) {
-  completion_status <- get_dashboard_status(project)
+  completion_status <- get_raw_completion_status(project, dashboard = TRUE)
   if (nrow(completion_status) == 0) {
     return(tibble(
       record_id = character(),
@@ -406,72 +339,6 @@ get_dashboard_status_summary <- function(project) {
     )
 }
 
-#' Collect raw dashboard completion status rows
-#'
-#' @description
-#' Finds REDCap `*_complete` fields and keeps only rows where that form can
-#' contribute to the dashboard tile.
-#'
-#' @inheritParams get_record_status_tiles
-#'
-#' @returns A tibble of normalized completion-status context rows.
-#'
-#' @noRd
-get_dashboard_status <- function(project) {
-  completion_fields <- names(project$data)[str_detect(
-    names(project$data),
-    "_complete$"
-  )]
-  if (length(completion_fields) == 0) {
-    return(get_empty_completion_status())
-  }
-
-  bind_rows(map(completion_fields, \(field) {
-    form_name <- sub("_complete$", "", field)
-    rows <- get_dashboard_completion_rows(project, form_name)
-
-    if (!any(rows)) {
-      return(get_empty_completion_status())
-    }
-
-    tibble(
-      record_id = as.character(project$data[[project$record_id_field]][rows]),
-      form_name = form_name,
-      event_name = get_event_values(project$data, rows),
-      repeat_instrument = get_repeat_instrument_values(project$data, rows),
-      repeat_instance = get_repeat_instance_values(project$data, rows),
-      field_name = field,
-      value = as.character(project$data[[field]][rows])
-    )
-  }))
-}
-
-#' Identify rows that can contribute to a form completion tile
-#'
-#' @description
-#' Repeating forms use matching `redcap_repeat_instrument` rows. Non-repeating
-#' forms use non-repeating rows. Both are limited to events where the form is
-#' enabled.
-#'
-#' @inheritParams get_record_status_tiles
-#' @param form_name REDCap form name.
-#'
-#' @returns A logical vector with one value per API data row.
-#'
-#' @noRd
-get_dashboard_completion_rows <- function(project, form_name) {
-  repeat_form <- get_is_repeating_form(project, form_name)
-  repeated_rows <- get_repeating_instrument_rows(project)
-
-  rows <- if (repeat_form) {
-    get_matching_repeat_rows(project, form_name)
-  } else {
-    !repeated_rows
-  }
-
-  rows & get_event_form_enabled_rows(project, form_name)
-}
-
 #' Convert completion status labels to a completion proportion
 #'
 #' @param value Character completion status values after normalization.
@@ -486,4 +353,26 @@ get_dashboard_pct_complete <- function(value) {
   }
 
   mean(value == "Complete", na.rm = TRUE)
+}
+
+#' @title Disambiguate dashboard labels using the original tile identity
+#' @description Adds event and instrument context only to colliding labels.
+#' @param grid Dashboard grid before labels replace raw instrument names.
+#' @returns The grid with unique display names for distinct event/form pairs.
+#' @noRd
+get_dashboard_display_names <- function(grid) {
+  labels <- grid |>
+    distinct(.data$event_name, .data$form_name, .data$display_form_name)
+  duplicate <- duplicated(labels$display_form_name) |
+    duplicated(labels$display_form_name, fromLast = TRUE)
+  context <- ifelse(is.na(labels$event_name), labels$form_name,
+    paste(labels$event_name, labels$form_name, sep = " / ")
+  )
+  labels$display_form_name[duplicate] <- paste0(
+    labels$display_form_name[duplicate], " [", context[duplicate], "]"
+  )
+  labels$display_form_name <- make.unique(labels$display_form_name)
+  grid |>
+    select(-"display_form_name") |>
+    left_join(labels, by = c("event_name", "form_name"), relationship = "many-to-one")
 }
