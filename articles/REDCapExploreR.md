@@ -134,6 +134,13 @@ plot_record_status(mock_record_status_data)
 ![Synthetic REDCap record status dashboard heat
 map.](REDCapExploreR_files/figure-html/record-status-mock-1.png)
 
+The legend shows the percentage of instances marked complete among
+instances with an exported status. Blank statuses are excluded from that
+denominator and appear as missing tiles when no status is available.
+Repeating behavior is resolved per event and instrument. Duplicate
+display labels include identifiers to keep their tiles distinct,
+including across arms.
+
 See the [`plot_record_status()`
 reference](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/plot_record_status.md)
 for compact mode and display customization.
@@ -166,6 +173,8 @@ mock_quality_report
 #> Records: 3
 #> Fields: 11
 #> Findings: 7
+#> Checks: missingness, metadata, outliers, operational, consistency
+#> Missingness assessed: 24 eligible field-row values
 
 mock_quality_report$findings |>
   dplyr::select(

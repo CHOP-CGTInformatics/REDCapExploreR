@@ -103,6 +103,8 @@ mock_quality_report
 #> Records: 3
 #> Fields: 11
 #> Findings: 7
+#> Checks: missingness, metadata, outliers, operational, consistency
+#> Missingness assessed: 24 eligible field-row values
 
 names(mock_quality_report)
 #> [1] "findings"  "summaries" "metadata"
@@ -112,7 +114,7 @@ names(mock_quality_report$metadata)
 #>  [1] "fields"                "forms"                 "events"               
 #>  [4] "event_instruments"     "instruments"           "repeating_instruments"
 #>  [7] "choices"               "validation"            "branching"            
-#> [10] "record_id_field"       "source"
+#> [10] "record_id_field"       "source"                "settings"
 ```
 
 Begin with the project summary and a count of findings. This shows
@@ -203,8 +205,11 @@ mock_quality_report$findings |>
 #> 4          6 info     incomplete_fo… adverse_… adverse_e… Unve… Complete Comple…
 ```
 
-Join findings to field metadata when labels and field types are useful
-during review:
+Join single-field findings to field metadata when labels and field types
+are useful during review. Aggregate findings such as duplicate labels
+contain comma-separated field names; expand those names first if
+enriching them through a field-level join. The example below keeps only
+single-field findings:
 
 ``` r
 
@@ -212,7 +217,7 @@ field_reference <- mock_quality_report$metadata$fields |>
   dplyr::select(field_name, field_label, field_type, required_field)
 
 mock_quality_report$findings |>
-  dplyr::filter(!is.na(field_name)) |>
+  dplyr::filter(!is.na(field_name), !grepl(",", field_name, fixed = TRUE)) |>
   dplyr::inner_join(field_reference, by = "field_name") |>
   dplyr::select(
     finding_id,
@@ -363,9 +368,9 @@ weighted missing rates by form. `summaries$fields` provides the detailed
 missingness profile:
 
 - `record_count` is the number of applicable rows assessed for the
-  field. It is not necessarily the number of distinct records because
-  events and repeating instruments can contribute multiple rows per
-  record.
+  field. It is best read as **assessed rows**, not distinct records,
+  because events and repeating instruments can contribute multiple rows
+  per record.
 - `missing_count` and `observed_count` partition applicable rows.
 - `missing_rate` is `missing_count / record_count`, or `NA` when no rows
   are applicable.
@@ -403,9 +408,9 @@ mock_quality_report$summaries$fields |>
 #>  6 record_id    demograp… TRUE                      2             0            0
 #>  7 response_sc… follow_up FALSE                     1             0            0
 #>  8 sex          demograp… FALSE                     2             0            0
-#>  9 visit_date   follow_up TRUE                      1             0            0
-#> 10 visit_notes  follow_up FALSE                     1             0            0
-#> 11 symptoms     follow_up FALSE                     0             0           NA
+#>  9 symptoms     follow_up FALSE                     1             0            0
+#> 10 visit_date   follow_up TRUE                      1             0            0
+#> 11 visit_notes  follow_up FALSE                     1             0            0
 #> # ℹ 1 more variable: distinct_count <int>
 ```
 
@@ -415,9 +420,10 @@ cells; they are not simple averages of field-level percentages.
 #### Records and events
 
 `summaries$records` contains one row per record. `missing_field_count`
-sums missing applicable field values across that record’s events and
-repeat instances. `finding_count` counts record-specific findings;
-field-level findings do not belong to an individual record.
+means **missing field values across events and instances**. It sums
+missing applicable field values across that record’s events and repeat
+instances. `finding_count` counts record-specific findings; field-level
+findings do not belong to an individual record.
 
 `summaries$events` counts raw API rows by unique event name. It is empty
 for nonlongitudinal projects.
@@ -452,13 +458,20 @@ checks.
 | `forms` | One row per form with field, required-field, and choice-field counts. |
 | `events` | Standardized longitudinal event metadata. |
 | `event_instruments` | Standardized event-to-form mapping. |
-| `instruments` | Instrument names and labels returned by REDCap. |
+| `instruments` | Original instrument columns plus standardized `form_name` and `form_label`. |
 | `repeating_instruments` | Repeating event and instrument configuration returned by REDCap. |
 | `choices` | Parsed explicit choices and implicit Yes/No and True/False choices. |
 | `validation` | Fields with validation types or minimum/maximum bounds. |
 | `branching` | Fields with branching logic and parsed referenced field names. |
 | `record_id_field` | Field name used as the project record identifier. |
 | `source` | Source of the normalized project; API reports use `"api"`. |
+| `settings` | Selected checks, thresholds, evaluation date, and package version. |
+
+The printed overview includes selected checks and the number of eligible
+field-row values assessed for missingness. When that number is zero,
+missingness was not assessed; zero findings does not mean that those
+fields were complete. `metadata$settings` records the settings needed to
+interpret a saved report.
 
 These tables support project-level review and help interpret findings:
 
@@ -525,7 +538,10 @@ forms from being treated as missing data.
 #### Form status
 
 Raw REDCap form status determines whether a row contributes to
-missingness:
+missingness. Gray statuses are requested as blank exports, preserving
+their distinction from Incomplete (`0`). A blank status produces an
+operational finding only when other exported values establish that the
+form is available:
 
 | Form status | Included in missingness? | `incomplete_form_status`? |
 |----|---:|---:|
@@ -577,7 +593,9 @@ missing:
   is selected across assessed rows with explicit checkbox exports.
 - `checkbox_none_with_other` is a record-field warning when an option
   labeled “None”, “No”, “Not applicable”, “N/A”, “NA”, or “None of the
-  above” is selected with another option.
+  above” is selected with another option. Choice codes such as `no` or
+  `na` do not imply exclusivity when their metadata labels have a
+  different meaning.
 
 ### Metadata-defined validation
 
@@ -672,14 +690,18 @@ mock_quality_report$findings |>
 
 `numeric_iqr_outlier` is a distribution-based heuristic, not a REDCap
 metadata rule. Its behavior depends on sample size, field distribution,
-and `outlier_iqr_multiplier`.
+and `outlier_iqr_multiplier`. Only structurally applicable event and
+instrument rows contribute to the reference distribution or receive IQR
+findings. At least four finite observations and a positive finite IQR
+are required. Nonfinite values in unvalidated numeric text are excluded
+with a warning; they do not stop the remaining report checks.
 
 `future_date` applies to valid date and datetime fields. It compares the
-exported calendar date with
-[`Sys.Date()`](https://rdrr.io/r/base/Sys.time.html) captured when the
-report runs. A date after that system date is flagged; a datetime later
-on the same calendar day is not. Malformed temporal values are handled
-by `invalid_validation_format` instead.
+exported calendar date with the evaluation date captured once when the
+report runs and saved in `metadata$settings$evaluation_date`. A date
+after that system date is flagged; a datetime later on the same calendar
+day is not. Malformed temporal values are handled by
+`invalid_validation_format` instead.
 
 ## Core Assumptions
 
@@ -697,8 +719,12 @@ findings externally.
 ### Branching logic support is intentionally bounded
 
 The branching evaluator supports ordinary field comparisons, checkbox
-choice references, parentheses, and `and`/`or` combinations. A valid
-expression that evaluates to `NA` is treated as not shown for that row.
+choice references, parentheses, and `and`/`or` combinations. Numeric
+relational comparisons use numeric operands; categorical equality
+preserves exact codes, including leading zeros. Quoted text is
+preserved, and explicit comparisons with `''` match blank exported
+values. A valid expression that evaluates to `NA` is treated as not
+shown for that row.
 
 REDCap functions, smart variables, and expressions outside the supported
 subset are treated as applicable rather than used to hide a potentially
@@ -722,3 +748,10 @@ record values. Structural metadata retrieval failures are reported as
 errors rather than silently converted to empty project structure.
 Results reflect the records and metadata available when the report is
 built, including the token’s project access and export configuration.
+
+### Free-text review suggestions
+
+`high_risk_free_text` identifies fields whose names or labels suggest
+free-text review. The report does not inspect stored text or establish
+that PHI is present. The message is a prompt to review the field’s
+intended use and safeguards.

@@ -21,7 +21,7 @@ plot_record_status(
   tile_linewidth = NULL,
   x_label = "REDCap Form",
   y_label = "Record ID",
-  fill_label = "Completion Status",
+  fill_label = "Instances marked complete (%)",
   rotate_x_text = TRUE,
   x_text_size = NULL,
   y_text_size = NULL,
@@ -126,8 +126,9 @@ from the remaining data columns when possible. For longitudinal output,
 `form_name`.
 
 `pct_complete` should range from `0` to `1`, where `1` is complete and
-`0` is incomplete or unverified. Missing values are shown with
-`missing_color`.
+`0` is incomplete or unverified. For repeating forms, the denominator
+includes only instances with an exported status; blank statuses are
+excluded. Missing tiles are shown with `missing_color`.
 
 ## Examples
 

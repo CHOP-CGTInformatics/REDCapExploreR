@@ -193,6 +193,12 @@ directly:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_record_status.html">plot_record_status</a></span><span class="op">(</span><span class="va">mock_record_status_data</span><span class="op">)</span></span></code></pre></div>
 <p><img src="REDCapExploreR_files/figure-html/record-status-mock-1.png" class="r-plt" alt="Synthetic REDCap record status dashboard heat map." width="700"></p>
+<p>The legend shows the percentage of instances marked complete among
+instances with an exported status. Blank statuses are excluded from that
+denominator and appear as missing tiles when no status is available.
+Repeating behavior is resolved per event and instrument. Duplicate
+display labels include identifiers to keep their tiles distinct,
+including across arms.</p>
 <p>See the <a href="../reference/plot_record_status.html"><code>plot_record_status()</code>
 reference</a> for compact mode and display customization.</p>
 </div>
@@ -219,6 +225,8 @@ and example findings:</p>
 <span><span class="co">#&gt; Records: 3</span></span>
 <span><span class="co">#&gt; Fields: 11</span></span>
 <span><span class="co">#&gt; Findings: 7</span></span>
+<span><span class="co">#&gt; Checks: missingness, metadata, outliers, operational, consistency</span></span>
+<span><span class="co">#&gt; Missingness assessed: 24 eligible field-row values</span></span>
 <span></span>
 <span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span></span>

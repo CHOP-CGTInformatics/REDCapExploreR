@@ -55,7 +55,9 @@ The record identifier column uses the REDCap project's record ID field
 name, so a project with `infseq_id` as the record ID field returns an
 `infseq_id` column. `form_name` is a factor ordered by REDCap event and
 instrument order. In longitudinal projects, `form_name` uses
-`"Event Label : Form Label"` when labels are available.
+`"Event Label : Form Label"` when labels are available. Colliding
+display labels are disambiguated with the unique event and instrument
+names.
 
 ## Examples
 

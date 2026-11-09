@@ -192,6 +192,8 @@ is a list with <code>findings</code>, <code>summaries</code>, and
 <span><span class="co">#&gt; Records: 3</span></span>
 <span><span class="co">#&gt; Fields: 11</span></span>
 <span><span class="co">#&gt; Findings: 7</span></span>
+<span><span class="co">#&gt; Checks: missingness, metadata, outliers, operational, consistency</span></span>
+<span><span class="co">#&gt; Missingness assessed: 24 eligible field-row values</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">mock_quality_report</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "findings"  "summaries" "metadata"</span></span>
@@ -201,7 +203,7 @@ is a list with <code>findings</code>, <code>summaries</code>, and
 <span><span class="co">#&gt;  [1] "fields"                "forms"                 "events"               </span></span>
 <span><span class="co">#&gt;  [4] "event_instruments"     "instruments"           "repeating_instruments"</span></span>
 <span><span class="co">#&gt;  [7] "choices"               "validation"            "branching"            </span></span>
-<span><span class="co">#&gt; [10] "record_id_field"       "source"</span></span></code></pre></div>
+<span><span class="co">#&gt; [10] "record_id_field"       "source"                "settings"</span></span></code></pre></div>
 <p>Begin with the project summary and a count of findings. This shows
 project size and structure alongside the types of review items
 found.</p>
@@ -281,14 +283,17 @@ regulatory classification.</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span>          3 info     future_date    demograp… enrollmen… 2999… On or b… Date f…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span>          5 info     incomplete_fo… follow_up follow_up… Inco… Complete Comple…</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span>          6 info     incomplete_fo… adverse_… adverse_e… Unve… Complete Comple…</span></span></code></pre></div>
-<p>Join findings to field metadata when labels and field types are
-useful during review:</p>
+<p>Join single-field findings to field metadata when labels and field
+types are useful during review. Aggregate findings such as duplicate
+labels contain comma-separated field names; expand those names first if
+enriching them through a field-level join. The example below keeps only
+single-field findings:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">field_reference</span> <span class="op">&lt;-</span> <span class="va">mock_quality_report</span><span class="op">$</span><span class="va">metadata</span><span class="op">$</span><span class="va">fields</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">field_name</span>, <span class="va">field_label</span>, <span class="va">field_type</span>, <span class="va">required_field</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">mock_quality_report</span><span class="op">$</span><span class="va">findings</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">field_name</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">field_name</span><span class="op">)</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">","</span>, <span class="va">field_name</span>, fixed <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">inner_join</a></span><span class="op">(</span><span class="va">field_reference</span>, by <span class="op">=</span> <span class="st">"field_name"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span></span>
 <span>    <span class="va">finding_id</span>,</span>
@@ -641,9 +646,9 @@ profile:</p>
 <ul>
 <li>
 <code>record_count</code> is the number of applicable rows assessed
-for the field. It is not necessarily the number of distinct records
-because events and repeating instruments can contribute multiple rows
-per record.</li>
+for the field. It is best read as <strong>assessed rows</strong>, not
+distinct records, because events and repeating instruments can
+contribute multiple rows per record.</li>
 <li>
 <code>missing_count</code> and <code>observed_count</code> partition
 applicable rows.</li>
@@ -685,9 +690,9 @@ rows are applicable.</li>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 6</span> record_id    demograp… TRUE                      2             0            0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 7</span> response_sc… follow_up FALSE                     1             0            0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;"> 8</span> sex          demograp… FALSE                     2             0            0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span> visit_date   follow_up TRUE                      1             0            0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">10</span> visit_notes  follow_up FALSE                     1             0            0</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">11</span> symptoms     follow_up FALSE                     0             0           <span style="color: #BB0000;">NA</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span> symptoms     follow_up FALSE                     1             0            0</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">10</span> visit_date   follow_up TRUE                      1             0            0</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">11</span> visit_notes  follow_up FALSE                     1             0            0</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># ℹ 1 more variable: distinct_count &lt;int&gt;</span></span></span></code></pre></div>
 <p>Project and form missing rates are weighted across applicable
 field-row cells; they are not simple averages of field-level
@@ -697,8 +702,9 @@ percentages.</p>
 <h4 id="records-and-events">Records and events<a class="anchor" aria-label="anchor" href="#records-and-events"></a>
 </h4>
 <p><code>summaries$records</code> contains one row per record.
-<code>missing_field_count</code> sums missing applicable field values
-across that record’s events and repeat instances.
+<code>missing_field_count</code> means <strong>missing field values
+across events and instances</strong>. It sums missing applicable field
+values across that record’s events and repeat instances.
 <code>finding_count</code> counts record-specific findings; field-level
 findings do not belong to an individual record.</p>
 <p><code>summaries$events</code> counts raw API rows by unique event
@@ -755,7 +761,8 @@ counts.</td>
 </tr>
 <tr class="odd">
 <td><code>instruments</code></td>
-<td>Instrument names and labels returned by REDCap.</td>
+<td>Original instrument columns plus standardized <code>form_name</code>
+and <code>form_label</code>.</td>
 </tr>
 <tr class="even">
 <td><code>repeating_instruments</code></td>
@@ -784,8 +791,18 @@ choices.</td>
 <td>Source of the normalized project; API reports use
 <code>"api"</code>.</td>
 </tr>
+<tr class="even">
+<td><code>settings</code></td>
+<td>Selected checks, thresholds, evaluation date, and package
+version.</td>
+</tr>
 </tbody>
 </table>
+<p>The printed overview includes selected checks and the number of
+eligible field-row values assessed for missingness. When that number is
+zero, missingness was not assessed; zero findings does not mean that
+those fields were complete. <code>metadata$settings</code> records the
+settings needed to interpret a saved report.</p>
 <p>These tables support project-level review and help interpret
 findings:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
@@ -890,7 +907,10 @@ forms from being treated as missing data.</p>
 <h4 id="form-status">Form status<a class="anchor" aria-label="anchor" href="#form-status"></a>
 </h4>
 <p>Raw REDCap form status determines whether a row contributes to
-missingness:</p>
+missingness. Gray statuses are requested as blank exports, preserving
+their distinction from Incomplete (<code>0</code>). A blank status
+produces an operational finding only when other exported values
+establish that the form is available:</p>
 <table class="table">
 <thead><tr class="header">
 <th>Form status</th>
@@ -973,7 +993,9 @@ exports.</li>
 <li>
 <code>checkbox_none_with_other</code> is a record-field warning when
 an option labeled “None”, “No”, “Not applicable”, “N/A”, “NA”, or “None
-of the above” is selected with another option.</li>
+of the above” is selected with another option. Choice codes such as
+<code>no</code> or <code>na</code> do not imply exclusivity when their
+metadata labels have a different meaning.</li>
 </ul>
 </div>
 </div>
@@ -1122,13 +1144,19 @@ formats or invalid choice codes.</p>
 </h3>
 <p><code>numeric_iqr_outlier</code> is a distribution-based heuristic,
 not a REDCap metadata rule. Its behavior depends on sample size, field
-distribution, and <code>outlier_iqr_multiplier</code>.</p>
+distribution, and <code>outlier_iqr_multiplier</code>. Only structurally
+applicable event and instrument rows contribute to the reference
+distribution or receive IQR findings. At least four finite observations
+and a positive finite IQR are required. Nonfinite values in unvalidated
+numeric text are excluded with a warning; they do not stop the remaining
+report checks.</p>
 <p><code>future_date</code> applies to valid date and datetime fields.
-It compares the exported calendar date with <code><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.Date()</a></code>
-captured when the report runs. A date after that system date is flagged;
-a datetime later on the same calendar day is not. Malformed temporal
-values are handled by <code>invalid_validation_format</code>
-instead.</p>
+It compares the exported calendar date with the evaluation date captured
+once when the report runs and saved in
+<code>metadata$settings$evaluation_date</code>. A date after that system
+date is flagged; a datetime later on the same calendar day is not.
+Malformed temporal values are handled by
+<code>invalid_validation_format</code> instead.</p>
 </div>
 </div>
 <div class="section level2">
@@ -1150,8 +1178,11 @@ tracking findings externally.</p>
 </h3>
 <p>The branching evaluator supports ordinary field comparisons, checkbox
 choice references, parentheses, and <code>and</code>/<code>or</code>
-combinations. A valid expression that evaluates to <code>NA</code> is
-treated as not shown for that row.</p>
+combinations. Numeric relational comparisons use numeric operands;
+categorical equality preserves exact codes, including leading zeros.
+Quoted text is preserved, and explicit comparisons with <code>''</code>
+match blank exported values. A valid expression that evaluates to
+<code>NA</code> is treated as not shown for that row.</p>
 <p>REDCap functions, smart variables, and expressions outside the
 supported subset are treated as applicable rather than used to hide a
 potentially required value. The report does not produce findings for
@@ -1178,6 +1209,14 @@ as errors rather than silently converted to empty project structure.
 Results reflect the records and metadata available when the report is
 built, including the token’s project access and export
 configuration.</p>
+</div>
+<div class="section level3">
+<h3 id="free-text-review-suggestions">Free-text review suggestions<a class="anchor" aria-label="anchor" href="#free-text-review-suggestions"></a>
+</h3>
+<p><code>high_risk_free_text</code> identifies fields whose names or
+labels suggest free-text review. The report does not inspect stored text
+or establish that PHI is present. The message is a prompt to review the
+field’s intended use and safeguards.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -26,4 +26,5 @@ mapping, instruments, and repeating instrument configuration. Errors
 from any structural metadata endpoint are reported rather than converted
 into empty project structure. Records and headers use raw REDCap codes
 with automatic type guessing disabled, and checkbox choices are returned
-as raw `0`/`1` values. Only empty strings are imported as missing.
+as raw `0`/`1` values. Only empty strings are imported as missing. Gray
+form statuses are exported as blanks rather than Incomplete (`0`).

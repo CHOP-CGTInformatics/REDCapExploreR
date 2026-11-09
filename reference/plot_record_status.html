@@ -64,7 +64,7 @@ can extend with additional ggplot2 layers.</p>
 <span>  tile_linewidth <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  x_label <span class="op">=</span> <span class="st">"REDCap Form"</span>,</span>
 <span>  y_label <span class="op">=</span> <span class="st">"Record ID"</span>,</span>
-<span>  fill_label <span class="op">=</span> <span class="st">"Completion Status"</span>,</span>
+<span>  fill_label <span class="op">=</span> <span class="st">"Instances marked complete (%)"</span>,</span>
 <span>  rotate_x_text <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  x_text_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  y_text_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -168,7 +168,9 @@ a <code>pct_complete</code> column. The record ID column is inferred from the re
 data columns when possible. For longitudinal output, <code>event_name</code> is ignored
 because event labels are already included in <code>form_name</code>.</p>
 <p><code>pct_complete</code> should range from <code>0</code> to <code>1</code>, where <code>1</code> is complete and <code>0</code> is
-incomplete or unverified. Missing values are shown with <code>missing_color</code>.</p>
+incomplete or unverified. For repeating forms, the denominator includes only
+instances with an exported status; blank statuses are excluded. Missing tiles
+are shown with <code>missing_color</code>.</p>
     </div>
 
     <div class="section level2">

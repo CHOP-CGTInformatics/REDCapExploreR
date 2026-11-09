@@ -33,7 +33,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Pull REDCap project data for quality reporting</h1>
-      <small class="dont-index">Source: <a href="https://github.com/CHOP-CGTInformatics/REDCapExploreR/blob/main/R/quality_report.R" class="external-link"><code>R/quality_report.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/CHOP-CGTInformatics/REDCapExploreR/blob/main/R/redcap_io.R" class="external-link"><code>R/redcap_io.R</code></a></small>
       <div class="d-none name"><code>pull_redcap_project.Rd</code></div>
     </div>
 
@@ -65,7 +65,8 @@ mapping, instruments, and repeating instrument configuration.
 Errors from any structural metadata endpoint are reported rather than
 converted into empty project structure. Records and headers use raw REDCap
 codes with automatic type guessing disabled, and checkbox choices are
-returned as raw <code>0</code>/<code>1</code> values. Only empty strings are imported as missing.</p>
+returned as raw <code>0</code>/<code>1</code> values. Only empty strings are imported as missing.
+Gray form statuses are exported as blanks rather than Incomplete (<code>0</code>).</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

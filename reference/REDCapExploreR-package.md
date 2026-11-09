@@ -18,3 +18,8 @@ Useful links:
 
 **Maintainer**: Richard Hanna <hannar1@chop.edu>
 ([ORCID](https://orcid.org/0009-0005-6496-8154))
+
+Authors:
+
+- Richard Hanna <hannar1@chop.edu>
+  ([ORCID](https://orcid.org/0009-0005-6496-8154))

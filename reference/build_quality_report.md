@@ -72,8 +72,11 @@ is `1`/Unverified or `2`/Complete. Status `0`/Incomplete is handled by
 operational checks and does not contribute to missingness. Checkbox
 parent fields are observed when their choice exports contain explicit
 values, including an all-zero no-selection state; only an all-missing
-set of choice exports is missing. Branching expressions that use
-unsupported REDCap functions or smart variables are treated as
+set of choice exports is missing. `metadata$settings` records the
+selected checks, thresholds, evaluation date, and package version. Field
+`record_count` means assessed rows; record-level `missing_field_count`
+counts missing values across events and instances. Branching expressions
+that use unsupported REDCap functions or smart variables are treated as
 applicable so required values remain reviewable.
 
 ## Details
