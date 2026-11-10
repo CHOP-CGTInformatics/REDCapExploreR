@@ -1,6 +1,6 @@
 # Field relationship summary implementation plan
 
-Implement `field_relationship_summary(field, codebook)` as a read-only report of
+Implement `field_relationship_summary(field, codebook, include_diagnostics = FALSE)` as a read-only report of
 one field's definition, upstream inputs, direct references, downstream connections,
 and explanations of how those relationships work. It uses current project
 metadata without fetching records or comparing historical codebooks.
@@ -28,7 +28,7 @@ fields from the same project metadata without repeated API calls. Record data
 is not needed. Include this short rationale in the function's `@details` and the
 getting-started example before the first call.
 
-- Export `field_relationship_summary(field, codebook)` with an S3 result class of
+- Export `field_relationship_summary(field, codebook, include_diagnostics = FALSE)` with an S3 result class of
   `redcap_field_relationship_summary`. Retain the user-selected function name;
   internal data-processing functions use `get_`.
 - Require one nonmissing, nonblank field name that exactly matches a field in
@@ -88,8 +88,9 @@ cannot be evaluated by the package.
   mapping. Unqualified references retain a relative current-context qualifier;
   do not invent a single event for a field used in several events.
 - Mark smart-variable event/instance selectors as context-dependent when field
-  identity can still be identified. Unrecognized modifier forms or ambiguous
-  syntax become unresolved candidates rather than guessed edges.
+  identity can still be identified. Support combined checkbox modifiers `:checked:value` and `:unchecked:value`.
+  Keep known field references traversable when qualifiers need interpretation;
+  unknown fields and ambiguous annotation candidates do not create edges.
 - Resolve checkbox codes against the parent's choices. Missing fields, missing
   choice codes, and invalid explicit event references are unresolved references,
   with the original expression retained for review.
@@ -116,7 +117,7 @@ cannot be evaluated by the package.
 
 ## Report and viewer
 
-Return a list with six stable components. Empty results use typed empty tibbles.
+Return a list with seven stable components. Empty results use typed empty tibbles.
 
 | Component | Contents |
 | --- | --- |
@@ -124,24 +125,27 @@ Return a list with six stable components. Empty results use typed empty tibbles.
 | `upstream` | One row per reachable upstream field, its definition/context, minimum depth, and a representative evidence path. |
 | `references` | One row per related reference occurrence across the upstream and downstream subgraphs, including direct references. Provide source field, dependent kind/name, relationship, metadata column, owning choice code, full expression, token text/span, event/instance qualifiers, resolution status/reason, and traversal role. |
 | `downstream` | One row per reachable dependent field or project setting, minimum depth, direct/indirect classification, its definition/context where applicable, and a representative evidence path. |
-| `summary` | Readable explanations grouped by related item and relationship type, with direction, direct/indirect classification, supporting occurrence IDs, and a connecting path. No proposed-change scenarios or risk ratings. |
-| `coverage` | Inspected source/location counts, extraction support, unavailable columns, unresolved or unclassified constructs with their locations, and definitions/parser versions. |
+| `summary` | Readable explanations grouped by related item, metadata location, exact expression, relationship type, and interpretation, with direction, direct/indirect classification, supporting occurrence IDs, and a connecting path. No deployment predictions or risk ratings. |
+| `issues` | Related interpretation issues with item, metadata location, exact expression, and reason, always available without diagnostics. |
+| `coverage` | Project-wide source counts, aggregate limits elsewhere, boundaries, and definitions/parser versions. Full project-wide `diagnostics` is an optional eighth component when `include_diagnostics = TRUE`. |
 
 A field with no outgoing relationships still returns its definition, upstream
 context, and coverage. Unresolved candidate references whose field identity is
 known remain visible in the related evidence, without asserting resolved context.
-Project-wide unresolved constructs remain discoverable through coverage because
-they can limit a claim that no references were found.
+Project-wide interpretation limits are disclosed in aggregate in coverage because
+they can conceal connections. Original related issue evidence is always retained. Full project-wide source and reference rows are retained only
+when `include_diagnostics = TRUE`.
 
 ### Relationship language
 
 Explain how the selected field connects to each item. Use categories such as
-calculation input, visibility condition, displayed value, initial/default value,
-embedded field, and unresolved context. Describe upstream as "What this field
-uses" and downstream as "Where this field is used" in the viewer.
+Calculation, Branching logic, Piping, Default value,
+Field embedding, and Action-tag condition, retaining specific action tags. Keep relationship type separate from
+interpretation status. Use Upstream and Downstream in both the R output and
+viewer, with short descriptions explaining their direction.
 
 - Use specific statements: "bmi uses weight_kg as a calculation input,"
-  "weight_review references weight_kg in its visibility condition," and
+  "weight_review references weight_kg in its branching logic," and
   "starting_weight references weight_kg when assigning its default value."
 - For indirect connections, explain the path: "review_notes is connected through
   bmi and review_required." Identify each relationship along that path.
@@ -167,11 +171,14 @@ uses" and downstream as "Where this field is used" in the viewer.
 - Export `view_field_relationship_summary(relationships, page_length = 25)` and
   `save_field_relationship_summary(relationships, file, page_length = 25)`,
   matching existing HTML viewing and single-file saving conventions.
-- Present Definition, References, What this field uses, Where this field is
-  used, Relationships, and Coverage sections. Default the reference table to
-  direct outgoing references; offer controls for relationship, traversal role,
-  and resolution status, plus search
-  and sorting. Provide full expressions and evidence-path details on demand.
+- Present Field, Upstream, Downstream, Summary, References, and Coverage sections.
+  Include Interpretation issues when relevant issues exist. Keep item inventories
+  concise; retain full definitions, parser offsets, IDs, and qualifier columns in R. Show all references
+  initially, with optional column filters. Use readable relationship-type labels
+  and notes for non-resolved interpretations while retaining machine-readable
+  codes in R output. Add a Diagnostics section only when the report was
+  constructed with `include_diagnostics = TRUE`. Provide full expressions and
+  evidence-path details on demand.
 - Extract only genuinely shared rendering/table and HTML-saving behavior from
   the codebook viewer. Scope JavaScript selectors and section identifiers to each
   viewer root so multiple viewers on the same page operate independently.
@@ -189,7 +196,7 @@ uses" and downstream as "Where this field is used" in the viewer.
    Confirm all existing public workflows remain compatible.
 2. Implement source-specific extraction and a typed occurrence table. Verify
    direct-reference evidence before adding graph traversal.
-3. Add cycle-safe traversal, the six-component report, relationship explanations,
+3. Add cycle-safe traversal, the seven-component report, relationship explanations,
    and S3 printing. Assert results against independently specified synthetic fixtures.
 4. Add the HTML viewer and saving workflow; refactor shared presentation only
    where it removes duplication without coupling the report calculations to UI.
@@ -243,5 +250,15 @@ lintr, non-rewriting styler verification, `R CMD check --no-manual` including
 vignettes, and a pkgdown build. Use only dependencies listed in DESCRIPTION in
 tests. Verify saved HTML offline and document any remaining browser-validation
 limitation. The feature is complete when the weight example explains its known
-relationships and coverage, and existing package tests pass without unexplained
+relationships, issues, and coverage, and existing package tests pass without unexplained
 output or snapshot changes.
+
+## Source layout
+
+- `R/field_relationship_summary.R`: report construction and validation, graph
+  traversal, relationship explanations, shared interpretation labels, and printing.
+- `R/relationship_references.R`: metadata source assembly, token and annotation
+  extraction, field/qualifier resolution, and project reference occurrences.
+- `R/relationship_coverage.R`: source coverage, related interpretation issues,
+  and optional project-wide diagnostics.
+- `R/relationship_viewer.R`: HTML presentation, display labels, and saving.

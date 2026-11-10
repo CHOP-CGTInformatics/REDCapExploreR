@@ -1,0 +1,216 @@
+---
+title: "Exploring Field Relationships"
+output: rmarkdown::html_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r setup}
+library(REDCapExploreR)
+```
+
+`field_relationship_summary()` identifies upstream references and downstream
+uses of a field in available REDCap metadata. It helps reviewers locate
+configuration to inspect before changing a field. It does not modify a project,
+evaluate expressions, or predict changes to stored values.
+
+## Build a codebook first
+
+A field name alone cannot establish its relationships. A codebook supplies the
+field definitions, expressions, and instrument/event context needed to interpret
+references. Build it once to explore several fields without repeated API calls.
+Record data and credentials are not needed when using an existing codebook.
+
+```{r live-project, eval=FALSE}
+codebook <- build_codebook(
+  redcap_uri = Sys.getenv("REDCAP_URI"),
+  token = Sys.getenv("REDCAP_TOKEN")
+)
+relationships <- field_relationship_summary("weight_kg", codebook)
+```
+
+Codebooks built before complete definitions were added must be rebuilt. Existing
+codebook viewing and saving still work with older objects.
+
+## Explore the bundled example
+
+`mock_codebook` extends the mock project's metadata with weight/BMI examples.
+These extra fields are metadata only; the record-based quality and dashboard
+fixtures do not contain them.
+
+```{r offline}
+relationships <- field_relationship_summary("weight_kg", mock_codebook)
+relationships
+relationships$downstream |>
+  dplyr::select(item_name, connection, reference_chain, status_note)
+```
+
+| Item | Relationship to `weight_kg` |
+| --- | --- |
+| `baseline_weight_kg` | Upstream: the `@DEFAULT` action tag references weight from the baseline event. |
+| `bmi` | Direct downstream calculation using weight and height. |
+| `weight_review` | Indirect downstream reference: its branching logic uses BMI. |
+| `visit_summary` | Pipes and embeds weight in its field label, and pipes weight again in its field note. |
+| `starting_weight` | References weight in an `@IF` condition and an `@DEFAULT` value. |
+| `weight_at_entry` | Uses a current-event smart variable in its default; interpretation requires event context. |
+| `custom_record_label` | Project setting that pipes weight. |
+| `diagnostic_example` | Clearly marked diagnostic example: contains ordinary piping, a deliberately unsupported action tag, and a reference to missing `retired_weight`. |
+
+Use exact dictionary field names, including a checkbox's parent name. Labels
+and exported checkbox columns such as `symptoms___fever` are not field names.
+
+## Read upstream and downstream correctly
+
+Upstream means fields referenced by the selected field. Downstream means fields
+or settings that reference it. A direct connection is one reference step;
+indirect connections follow several steps. Arrows point from the referenced field
+toward the referencing item. An upstream chain is displayed from the selected
+field back toward its inputs, with arrows pointing in the reverse direction.
+
+Each chain labels its steps, for example:
+
+`weight_kg -[Calculation]-> bmi -[Branching logic]-> weight_review`
+
+A chain identifies configuration to review. It does not establish that values
+or behavior will change. Piping a value into a field label does not change that
+field's stored value, and branching logic controls display rather than calculating
+an answer. Likewise, a default initializes a field; it does not establish ongoing
+synchronization with its source.
+
+Traversal operates at field level. It does not establish a continuous runtime
+path through particular events, arms, or repeating instances. One deterministic
+shortest chain is shown per item; alternative reference occurrences remain in
+`references`. Cycles terminate without repeatedly listing the same item.
+These connections are metadata references, not foreign keys, joins, cardinalities,
+or guarantees of referential integrity.
+
+## Find the configuration to inspect
+
+| R element / viewer section | Purpose |
+| --- | --- |
+| `field` / Field | Complete selected definition, annotations, and structural context. |
+| `upstream` / Upstream | Inventory of fields used directly or indirectly, with labelled chains. |
+| `downstream` / Downstream | Inventory of fields and settings that reference this field, with labelled chains. |
+| `summary` / Summary | Human explanations grouped by item, metadata location, expression, and interpretation. |
+| `references` / References | Individual occurrences with original expressions and reference tokens. |
+| `issues` / Interpretation issues | Related interpretation limits with their location, expression, and reason. This viewer section appears when issues exist. |
+| `coverage` / Coverage | Project-wide source availability, other interpretation limits, and exclusions. |
+
+```{r summary}
+relationships$summary |>
+  dplyr::select(dependent_name, metadata_column, expression, occurrence_count, explanation)
+```
+
+Repeated references within an expression increase `occurrence_count`; they do
+not create additional related fields. References in different metadata locations
+or distinct expressions remain separate Summary rows. Field labels and notes
+are separate configuration to inspect, even when both pipe the same value.
+
+The viewer uses REDCap terms such as Branching logic, Piping, Field embedding,
+and Default value (`@DEFAULT`). It keeps item inventories short. Complete related
+field definitions, qualifiers, character offsets, and report-local occurrence IDs
+remain available in the R output. `path` contains occurrence IDs and `field_path`
+contains item names; `reference_chain` gives a readable, typed chain. These IDs
+are local to a report, not permanent identifiers for audit comparisons.
+
+```{r viewer, eval=FALSE}
+view_field_relationship_summary(relationships)
+save_field_relationship_summary(relationships, "weight-relationships.html")
+```
+
+References initially shows every returned occurrence. Filters apply only when
+you choose them. Saved HTML includes local dependencies for offline use.
+
+## Interpret matching and issues
+
+`relationship` describes the reference's purpose. `action_tag` retains a specific
+tag when present. `field_matched` means the field name exists in the dictionary.
+It does not validate the REDCap configuration.
+
+`resolution` records qualifier/syntax interpretation:
+
+- `resolved`: the field and supported qualifiers were identified; the expression
+  was not evaluated or fully validated.
+- `context_dependent`: the field is known, but event or instance selection needs
+  context, or an explicit instrument-event mapping is unavailable.
+- `unresolved`: a field or qualifier could not be interpreted, or a checked
+  configuration constraint failed.
+- `unclassified`: candidate syntax or action-tag behavior is not interpreted.
+
+Known field references remain linked even when qualifiers need interpretation.
+Unknown fields and unsupported annotation candidates do not create traversable
+links. They are retained as evidence and interpretation issues. `status_note`
+contains the specific reason and is empty when no interpretation limit was found.
+That empty note does not certify a valid REDCap expression.
+
+`traversal_role` is independent of interpretation: `upstream`, `downstream`,
+`both` for references within both traversed regions of a cycle, or `self` for a
+self-reference. `both` does not assert a direct reciprocal pair.
+
+Related issues are always available without project-wide diagnostics:
+
+```{r issues}
+relationships$issues |>
+  dplyr::select(dependent_name, metadata_column, expression, status_note)
+```
+
+For example, the missing `retired_weight` reference is in a related field's note,
+but is not part of a known reference chain to `weight_kg`. Its evidence is in
+`issues`; adding unrelated inputs to References would blur that table's scope.
+Issues describe interpretation limits, not a count of invalid REDCap settings.
+
+## Review a proposed change
+
+Start with direct upstream/downstream uses and inspect their Summary locations.
+Then review indirect chains and interpretation issues. Changing a name, a choice
+code, a label, or a value can have different consequences:
+
+| Proposed change | Configuration to inspect |
+| --- | --- |
+| Rename or remove a field | References containing its field name, including calculations, branching logic, action tags, piping, and embedding. |
+| Change codes or field type | Logic and calculations expecting the current representation; checkbox choice references and piping modifiers. |
+| Change labels | Piping that displays labels, including choice labels, rather than raw values. |
+| Change data values | Calculations and branching logic that read those values; default values need separate consideration of when they are applied. |
+
+These are review prompts, not predictions. The package does not establish whether
+stored calculations have been recalculated, whether conditions will be true for
+particular records, or whether a change is safe to deploy.
+
+## Understand inspection scope
+
+Coverage counts are **project-wide**, not counts of relationships for the selected
+field. Source rows group available locations, nonblank expressions, and reference
+occurrences by metadata source. Other-project interpretation limits are disclosed
+in aggregate. Source counts overlap with interpretation-limit counts and must
+not be added together as an issue total. Related issue details live in `issues`.
+
+Supported sources include branching logic, calculated fields, field annotations,
+field labels and notes, section headers, choice labels, and the custom record
+label. Supported action-tag interpretation includes `@DEFAULT`, `@CALCTEXT`,
+`@CALCDATE`, and conditions and recognized branches within `@IF`. Quoted ordinary
+formula literals are ignored. Ambiguous quoted references in calculation action
+tags are conservatively unclassified.
+
+The extractor recognizes explicit events and numeric instances, common dynamic
+event/instance selectors, checkbox choices, and piping modifiers including
+`:checked:value` and `:unchecked:value`. It flags cross-instrument embedding,
+but does not validate every embedding, instrument-page, action-tag, or expression
+constraint. REDCap versions can support syntax outside this parser's scope.
+
+Alerts, automated survey invitations, survey queues, report filters, data quality
+rules, external modules/scripts, and other settings outside retained metadata are
+not inspected. An empty result does not establish the absence of external uses.
+
+Request a full project inventory only when needed:
+
+```{r diagnostics}
+detailed <- field_relationship_summary("weight_kg", mock_codebook, include_diagnostics = TRUE)
+detailed$diagnostics |>
+  dplyr::count(row_kind, status)
+```
+
+This adds `diagnostics` and an optional Diagnostics viewer section without changing
+related issue details or compact Coverage. It includes blank and unavailable
+locations and can be large.

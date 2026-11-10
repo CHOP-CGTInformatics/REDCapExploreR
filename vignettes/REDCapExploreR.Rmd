@@ -73,7 +73,7 @@ codebook
 codebook$fields
 ```
 
-Use `mock_codebook` to inspect the same output structure without API
+Use `mock_codebook` to inspect the output structure without API
 credentials.
 
 ```{r codebook-mock}
@@ -95,6 +95,29 @@ To save a codebook output to HTML, simply use:
 ```{r save-codebook, eval=FALSE}
 save_codebook(codebook, file = "path.html")
 ```
+
+## Field relationships
+
+A codebook supplies definitions and event/repeat context for a field name. Build
+it once to explore several fields without additional API calls or record exports.
+
+```{r field-relationships}
+relationships <- field_relationship_summary("weight_kg", mock_codebook)
+relationships
+relationships$upstream
+relationships$downstream
+```
+
+`relationships$references` preserves expressions and source locations, while
+`relationships$issues` retains related interpretation issues and their evidence.
+`relationships$coverage` summarizes project-wide inspection scope and exclusions. The viewer
+uses the same Upstream, Downstream, Summary, and Coverage terms and shows every
+reference by default. The bundled codebook includes metadata-only examples of
+indirect paths, annotations, and interpretation notes around `weight_kg`.
+Use `include_diagnostics = TRUE` when building the report to include full project-wide diagnostic details. Use
+`view_field_relationship_summary()` to explore the report and
+`save_field_relationship_summary()` to save a standalone HTML viewer. See
+[Exploring Field Relationships](field-relationships.html) for details.
 
 ## Record status dashboard
 

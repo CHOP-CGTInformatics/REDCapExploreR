@@ -228,7 +228,40 @@ mock_record_status_data <- mock_redcap_project |>
   get_quality_project_data() |>
   get_record_status_tiles()
 
-mock_codebook <- mock_redcap_project |>
+# Metadata-only examples leave the record-based dashboard and quality fixtures unchanged.
+relationship_project <- mock_redcap_project
+relationship_project$metadata <- relationship_project$metadata |>
+  dplyr::mutate(field_annotation = NA_character_, field_note = NA_character_, section_header = NA_character_) |>
+  dplyr::bind_rows(tibble::tibble(
+    field_name = c(
+      "baseline_weight_kg", "weight_kg", "height_cm", "bmi", "weight_review",
+      "visit_summary", "starting_weight", "weight_at_entry", "diagnostic_example"
+    ),
+    form_name = c("demographics", rep("follow_up", 8)),
+    field_type = c("text", "text", "text", "calc", "notes", "descriptive", "text", "text", "descriptive"),
+    field_label = c(
+      "Baseline weight (kg)", "Weight (kg)", "Height (cm)", "Body mass index",
+      "Review raised BMI", "Weight [weight_kg] kg; enter weight: {weight_kg}",
+      "Initial weight (kg)", "Weight at initial form entry (kg)",
+      "Diagnostic example (deliberately unsupported): [weight_kg]"
+    ),
+    select_choices_or_calculations = c(NA, NA, NA, "[weight_kg] / ([height_cm]/100)^2", rep(NA_character_, 5)),
+    branching_logic = c(NA, NA, NA, NA, "[bmi] > 30", NA, NA, NA, NA),
+    field_annotation = c(
+      NA, "@DEFAULT='[baseline_arm_1][baseline_weight_kg]'", NA, NA, NA, NA,
+      "@IF([weight_kg] > 0, '@DEFAULT=\"[weight_kg]\"', '@HIDDEN')",
+      "@DEFAULT='[current-event-name][weight_kg]'", "@UNKNOWN='[weight_kg]'"
+    ),
+    field_note = c(
+      rep(NA_character_, 5), "Weight: [weight_kg]; symptom codes: [symptoms:checked:value]",
+      NA, NA, "Deliberately missing field: [retired_weight]"
+    ),
+    text_validation_type_or_show_slider_number = c("number", "number", "number", rep(NA_character_, 6)),
+    text_validation_min = c(0, 0, 0, rep(NA_real_, 6))
+  ))
+relationship_project$project_info$custom_record_label <- "[record_id]: weight [weight_kg] kg"
+
+mock_codebook <- relationship_project |>
   get_codebook_project() |>
   get_codebook()
 
