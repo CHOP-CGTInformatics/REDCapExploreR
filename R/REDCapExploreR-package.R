@@ -5,7 +5,7 @@
 #' @importFrom DT datatable
 #' @importFrom dplyr across arrange bind_rows case_when count cross_join distinct
 #'   filter group_by if_else left_join mutate n n_distinct pull relocate rename
-#'   right_join row_number select slice summarise transmute
+#'   right_join row_number select slice summarise
 #' @importFrom ggplot2 aes element_blank element_text geom_tile ggplot labs
 #'   scale_fill_gradientn scale_x_discrete scale_y_discrete theme theme_minimal
 #' @importFrom htmltools browsable HTML htmlDependency save_html tagList tags
@@ -15,7 +15,8 @@
 #'   redcap_metadata_read redcap_project_info_read redcap_read_oneshot
 #' @importFrom rlang .data .env !!! :=
 #' @importFrom stats quantile setNames
-#' @importFrom stringr str_detect str_squish str_trim str_trunc
+#' @importFrom stringr str_detect str_extract_all str_locate str_locate_all str_match
+#'   str_remove str_remove_all str_squish str_sub str_trim str_trunc
 #' @importFrom tibble as_tibble tibble
 #' @importFrom tidyselect all_of any_of everything
 "_PACKAGE"

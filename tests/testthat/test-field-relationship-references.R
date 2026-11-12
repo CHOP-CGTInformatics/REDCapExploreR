@@ -145,3 +145,13 @@ test_that("direction describes self references and cycles independently of inter
   expect_equal(candidate$traversal_role, "downstream")
   expect_false("review_notes" %in% report$downstream$item_name)
 })
+
+test_that("reference locations preserve character offsets and typed empty matches", {
+  text <- "Weight \u00e9 \U0001f9ea: [weight_kg]"
+  tokens <- get_relationship_tokens(text, "text")
+  expect_equal(tokens$reference_text, "[weight_kg]")
+  expect_equal(stringr::str_sub(text, tokens$start, tokens$end), tokens$reference_text)
+  expect_equal(nrow(get_relationship_tokens("No references")), 0L)
+  expect_equal(nrow(get_relationship_annotation_regions("No action tags")), 0L)
+  expect_equal(get_relationship_annotation_regions("@DEFAULT='[weight_kg]' @READONLY")$tag, c("@DEFAULT", "@READONLY"))
+})

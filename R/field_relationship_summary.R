@@ -163,18 +163,18 @@ get_relationship_traversal <- function(field, edges, direction) {
   start <- paste0("field:", field)
   seen <- tibble(node = start, depth = 0L, path = list(integer()), field_path = list(field))
   frontier <- seen
-  from <- if (direction == "downstream") "from" else "to"
-  to <- if (direction == "downstream") "to" else "from"
+  current_node_column <- if (direction == "downstream") "from" else "to"
+  next_node_column <- if (direction == "downstream") "to" else "from"
   while (nrow(frontier) > 0) {
     next_rows <- bind_rows(map(seq_len(nrow(frontier)), \(i) {
-      matches <- which(edges[[from]] == frontier$node[[i]])
+      matches <- which(edges[[current_node_column]] == frontier$node[[i]])
       if (length(matches) == 0) {
         return(seen[0, ])
       }
       tibble(
-        node = edges[[to]][matches], depth = frontier$depth[[i]] + 1L,
+        node = edges[[next_node_column]][matches], depth = frontier$depth[[i]] + 1L,
         path = map(matches, \(j) c(frontier$path[[i]], edges$occurrence_id[[j]])),
-        field_path = map(matches, \(j) c(frontier$field_path[[i]], sub("^[^:]+:", "", edges[[to]][[j]])))
+        field_path = map(matches, \(j) c(frontier$field_path[[i]], str_remove(edges[[next_node_column]][[j]], "^[^:]+:")))
       )
     }))
     frontier <- next_rows |>
@@ -194,8 +194,8 @@ get_relationship_traversal <- function(field, edges, direction) {
 #' @returns Related items with their available definitions and display context.
 #' @noRd
 get_relationship_items <- function(codebook, traversal, references, direction) {
-  kind <- sub(":.*$", "", traversal$node)
-  name <- sub("^[^:]+:", "", traversal$node)
+  kind <- str_remove(traversal$node, ":.*$")
+  name <- str_remove(traversal$node, "^[^:]+:")
   definition <- get_relationship_definitions(codebook, ifelse(kind == "field", name, NA_character_))
   out <- tibble(
     item_kind = kind, item_name = name, depth = traversal$depth,

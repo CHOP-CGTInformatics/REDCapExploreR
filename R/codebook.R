@@ -257,24 +257,8 @@ get_codebook_fields <- function(project, forms, choices) {
         .data$repeating_status
       )
     ) |>
-    transmute(
-      .data$field_order,
-      .data$form_order,
-      .data$form_name,
-      .data$form_label,
-      .data$field_name,
-      .data$field_label,
-      .data$field_type,
-      .data$descriptive_field,
-      .data$required_field,
-      .data$identifier,
-      .data$choice_count,
-      .data$choices,
-      .data$validation,
+    mutate(
       branching_logic = as.character(.data$branching_logic),
-      .data$event_count,
-      .data$event_names,
-      .data$repeating_status,
       field_note = if ("field_note" %in% names(metadata)) {
         as.character(.data$field_note)
       } else {
@@ -285,6 +269,12 @@ get_codebook_fields <- function(project, forms, choices) {
       } else {
         NA_character_
       }
+    ) |>
+    select(
+      "field_order", "form_order", "form_name", "form_label", "field_name", "field_label",
+      "field_type", "descriptive_field", "required_field", "identifier", "choice_count",
+      "choices", "validation", "branching_logic", "event_count", "event_names",
+      "repeating_status", "field_note", "matrix_group_name"
     )
 }
 
@@ -478,7 +468,8 @@ get_codebook_repeating_summary <- function(project) {
   repeating_forms <- if ("form_name" %in% names(repeating)) {
     repeating |>
       filter(!get_is_missing(.data$form_name)) |>
-      transmute(
+      mutate(
+        .keep = "none",
         form_name = as.character(.data$form_name),
         repeating_status = "Repeating instrument"
       )
@@ -505,7 +496,8 @@ get_codebook_repeating_summary <- function(project) {
 
     project$event_instruments |>
       filter(.data$redcap_event_name %in% event_names) |>
-      transmute(
+      mutate(
+        .keep = "none",
         form_name = as.character(.data$form_name),
         repeating_status = "Repeating event"
       )

@@ -45,17 +45,18 @@ get_relationship_diagnostics <- function(sources, references, codebook) {
     }
     text <- source$expression
     if (source$context %in% c("expression", "calculation")) {
-      text <- gsub(r"{'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"}", "", text, perl = TRUE)
+      text <- str_remove_all(text, r"{'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"}")
     }
-    text <- gsub(r"{\[[^][\r\n]+\](?:\s*\[[^][\r\n]+\])*}", "", text, perl = TRUE)
-    if (grepl("[\\[\\]]", text, perl = TRUE)) "Unmatched reference brackets." else NA_character_
+    text <- str_remove_all(text, r"{\[[^\[\]\r\n]+\](?:\s*\[[^\[\]\r\n]+\])*}")
+    if (str_detect(text, "[\\[\\]]")) "Unmatched reference brackets." else NA_character_
   })
   partial <- !is.na(source_issues)
   coverage$status[partial] <- "unclassified"
   coverage$detail[partial] <- source_issues[partial]
   unresolved <- references |>
     filter(.data$resolution != "resolved") |>
-    transmute(
+    mutate(
+      .keep = "none",
       source_id = .data$source_id, dependent_kind = .data$dependent_kind,
       dependent_name = .data$dependent_name, metadata_column = .data$metadata_column,
       choice_code = .data$choice_code, expression = .data$expression, context = .data$relationship,
@@ -89,7 +90,8 @@ get_relationship_coverage <- function(diagnostics, report) {
       reference_count = sum(.data$reference_count),
       .by = "metadata_column"
     ) |>
-    transmute(
+    mutate(
+      .keep = "none",
       scope = "sources", metadata_column = .data$metadata_column,
       status = case_when(
         .data$available_count == 0 ~ "unavailable",

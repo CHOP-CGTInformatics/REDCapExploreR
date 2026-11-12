@@ -93,7 +93,8 @@ get_relationship_viewer_tables <- function(relationships) {
     tables$issues <- list(
       title = "Interpretation issues",
       data = relationships$issues |>
-        transmute(
+        mutate(
+          .keep = "none",
           Item = .data$dependent_name,
           `Metadata location` = get_relationship_location_label(.data$metadata_column),
           `Choice code` = .data$choice_code,
@@ -109,7 +110,8 @@ get_relationship_viewer_tables <- function(relationships) {
   tables$coverage <- list(
     title = "Coverage",
     data = relationships$coverage |>
-      transmute(
+      mutate(
+        .keep = "none",
         `Inspection scope` = case_when(
           .data$scope == "sources" ~ "Project sources",
           .data$scope == "project_notes" ~ "Other project interpretation limits",
@@ -183,7 +185,8 @@ get_relationship_viewer_evidence <- function(data, summary = FALSE) {
 #' @noRd
 get_relationship_viewer_items <- function(data) {
   data |>
-    transmute(
+    mutate(
+      .keep = "none",
       Item = .data$item_name,
       Kind = if_else(.data$item_kind == "field", "Field", "Project setting"),
       Instrument = .data$form_name,

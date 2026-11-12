@@ -31,8 +31,8 @@ get_relationship_sources <- function(codebook) {
     }
     parts <- strsplit(as.character(definition), "|", fixed = TRUE)[[1]]
     bind_rows(map(parts, \(part) {
-      comma <- regexpr(",", part, fixed = TRUE)[[1]]
-      if (comma == -1) {
+      comma <- str_locate(part, ",")[1, "start"]
+      if (is.na(comma)) {
         return(tibble())
       }
       tibble(
@@ -102,19 +102,19 @@ get_project_relationship_references <- function(sources, codebook) {
 #' @returns Reference text with one-based inclusive character spans.
 #' @noRd
 get_relationship_tokens <- function(text, context = "expression") {
-  references <- r"{\[[^][\r\n]+\](?:\s*\[[^][\r\n]+\])*|\{[A-Za-z][A-Za-z0-9_]*\}}"
+  references <- r"{\[[^\[\]\r\n]+\](?:\s*\[[^\[\]\r\n]+\])*|\{[A-Za-z][A-Za-z0-9_]*\}}"
   pattern <- if (context == "expression") {
     paste0(r"{'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|}", references)
   } else {
     references
   }
-  matches <- gregexpr(pattern, text, perl = TRUE)[[1]]
-  if (matches[[1]] == -1) {
+  matches <- str_locate_all(text, pattern)[[1]]
+  if (nrow(matches) == 0) {
     return(tibble(reference_text = character(), start = integer(), end = integer()))
   }
   tokens <- tibble(
-    reference_text = substring(text, matches, matches + attr(matches, "match.length") - 1L),
-    start = as.integer(matches), end = as.integer(matches + attr(matches, "match.length") - 1L)
+    reference_text = str_sub(text, matches[, "start"], matches[, "end"]),
+    start = matches[, "start"], end = matches[, "end"]
   )
   tokens |>
     filter(startsWith(.data$reference_text, "[") | startsWith(.data$reference_text, "{"))
@@ -126,19 +126,19 @@ get_relationship_tokens <- function(text, context = "expression") {
 #' @returns Annotation tags with their character spans and parsing status.
 #' @noRd
 get_relationship_annotation_regions <- function(text) {
-  matches <- gregexpr("@[A-Za-z][A-Za-z0-9_-]*", text, perl = TRUE)[[1]]
-  if (matches[[1]] == -1) {
+  matches <- str_locate_all(text, "@[A-Za-z][A-Za-z0-9_-]*")[[1]]
+  if (nrow(matches) == 0) {
     return(tibble(tag = character(), start = integer(), end = integer(), complete = logical(), branch_start = integer()))
   }
-  regions <- bind_rows(map(seq_along(matches), \(index) {
-    start <- matches[[index]]
-    tag_end <- start + attr(matches, "match.length")[[index]] - 1L
+  regions <- bind_rows(map(seq_len(nrow(matches)), \(index) {
+    start <- matches[index, "start"]
+    tag_end <- matches[index, "end"]
     position <- tag_end + 1L
-    while (position <= nchar(text) && grepl("\\s", substr(text, position, position))) position <- position + 1L
+    while (position <= nchar(text) && str_detect(str_sub(text, position, position), "\\s")) position <- position + 1L
     opener <- substr(text, position, position)
     if (opener == "=") {
       position <- position + 1L
-      while (position <= nchar(text) && grepl("\\s", substr(text, position, position))) position <- position + 1L
+      while (position <= nchar(text) && str_detect(str_sub(text, position, position), "\\s")) position <- position + 1L
       opener <- substr(text, position, position)
     }
     quote <- ""
@@ -175,7 +175,7 @@ get_relationship_annotation_regions <- function(text) {
         }
       }
     } else {
-      end <- if (index < length(matches)) matches[[index + 1L]] - 1L else nchar(text)
+      end <- if (index < nrow(matches)) matches[index + 1L, "start"] - 1L else nchar(text)
     }
     tibble(
       tag = toupper(substr(text, start, tag_end)), start = start, end = end,
@@ -260,11 +260,11 @@ get_resolved_relationship <- function(token, codebook) {
   parts <- if (embedding) {
     substring(text, 2L, nchar(text) - 1L)
   } else {
-    matches <- regmatches(text, gregexpr("\\[[^]]+\\]", text))[[1]]
+    matches <- str_extract_all(text, "\\[[^\\]]+\\]")[[1]]
     substring(matches, 2L, nchar(matches) - 1L)
   }
   fields <- codebook$definitions$fields
-  base <- sub("[:(].*$", "", parts)
+  base <- str_remove(parts, "[:(].*$")
   candidates <- which(base %in% fields$field_name)
   # A bare unknown field is still a reference, rather than an omitted token.
   field_index <- if (length(candidates) == 1) candidates else if (length(parts) == 1) 1L else NA_integer_
@@ -272,8 +272,8 @@ get_resolved_relationship <- function(token, codebook) {
   field_token <- if (is.na(field_index)) "" else parts[[field_index]]
   event <- if (!is.na(field_index) && field_index > 1) parts[[field_index - 1L]] else NA_character_
   instance <- if (!is.na(field_index) && field_index < length(parts)) parts[[field_index + 1L]] else NA_character_
-  modifier <- if (grepl(":", field_token, fixed = TRUE)) sub("^[^:]+:", "", field_token) else NA_character_
-  choice <- if (grepl("\\(", field_token)) sub("^[^(]+\\(([^)]+)\\).*$", "\\1", field_token) else NA_character_
+  modifier <- str_match(field_token, "^[^:]+:(.*)$")[1, 2]
+  choice <- str_match(field_token, "^[^(]+\\(([^)]+)\\)")[1, 2]
   issues <- character()
   dynamic <- character()
   if (length(parts) > 3 || (!is.na(field_index) && field_index > 2)) {
@@ -302,7 +302,7 @@ get_resolved_relationship <- function(token, codebook) {
         issues <- c(issues, "Field's instrument is not mapped to the explicit event.")
       }
     }
-    if (!is.na(instance) && !grepl("^[1-9][0-9]*$", instance)) {
+    if (!is.na(instance) && !str_detect(instance, "^[1-9][0-9]*$")) {
       if (instance %in% c("current-instance", "previous-instance", "next-instance", "first-instance", "last-instance")) {
         dynamic <- c(dynamic, "Instance is selected dynamically.")
       } else {
@@ -341,19 +341,19 @@ get_relationship_display_pipes <- function(token, codebook) {
   if (!token$relationship %in% c("displayed_value", "initial_value")) {
     return(token)
   }
-  matches <- gregexpr("\\[[^]]+\\]", token$reference_text)[[1]]
-  if (length(matches) < 2 || matches[[1]] == -1) {
+  matches <- str_locate_all(token$reference_text, "\\[[^\\]]+\\]")[[1]]
+  if (nrow(matches) < 2) {
     return(token)
   }
-  parts <- substring(token$reference_text, matches, matches + attr(matches, "match.length") - 1L)
-  fields <- sub("[:(].*$", "", substring(parts, 2L, nchar(parts) - 1L))
+  parts <- str_sub(token$reference_text, matches[, "start"], matches[, "end"])
+  fields <- str_remove(str_sub(parts, 2L, -2L), "[:(].*$")
   if (!all(fields %in% codebook$definitions$fields$field_name) ||
     fields[[1]] %in% codebook$events[["redcap_event_name"]]) {
     return(token)
   }
   out <- token[rep(1L, length(parts)), ]
   out$reference_text <- parts
-  out$start <- token$start + as.integer(matches) - 1L
+  out$start <- token$start + matches[, "start"] - 1L
   out$end <- out$start + nchar(parts) - 1L
   out
 }

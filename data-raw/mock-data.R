@@ -229,8 +229,8 @@ mock_record_status_data <- mock_redcap_project |>
   get_record_status_tiles()
 
 # Metadata-only examples leave the record-based dashboard and quality fixtures unchanged.
-relationship_project <- mock_redcap_project
-relationship_project$metadata <- relationship_project$metadata |>
+codebook_project <- mock_redcap_project
+codebook_project$metadata <- codebook_project$metadata |>
   dplyr::mutate(field_annotation = NA_character_, field_note = NA_character_, section_header = NA_character_) |>
   dplyr::bind_rows(tibble::tibble(
     field_name = c(
@@ -259,9 +259,9 @@ relationship_project$metadata <- relationship_project$metadata |>
     text_validation_type_or_show_slider_number = c("number", "number", "number", rep(NA_character_, 6)),
     text_validation_min = c(0, 0, 0, rep(NA_real_, 6))
   ))
-relationship_project$project_info$custom_record_label <- "[record_id]: weight [weight_kg] kg"
+codebook_project$project_info$custom_record_label <- "[record_id]: weight [weight_kg] kg"
 
-mock_codebook <- relationship_project |>
+mock_codebook <- codebook_project |>
   get_codebook_project() |>
   get_codebook()
 
