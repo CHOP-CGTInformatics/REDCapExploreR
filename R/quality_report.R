@@ -477,7 +477,8 @@ get_missingness_findings <- function(project, field_summary, sparse_threshold) {
       .data$missing_rate >= sparse_threshold,
       .data$record_count > 0
     ) |>
-    transmute(
+    mutate(
+      .keep = "none",
       check = "missingness",
       issue = "unexpected_sparse_field",
       severity = "info",
@@ -512,7 +513,8 @@ get_metadata_findings <- function(project) {
       .groups = "drop"
     ) |>
     filter(.data$field_count > 1) |>
-    transmute(
+    mutate(
+      .keep = "none",
       check = "metadata",
       issue = "duplicate_field_label",
       severity = "info",
@@ -528,7 +530,8 @@ get_metadata_findings <- function(project) {
 
   missing_labels <- metadata |>
     filter(get_is_missing(.data$field_label)) |>
-    transmute(
+    mutate(
+      .keep = "none",
       check = "metadata",
       issue = "missing_field_label",
       severity = "info",
@@ -547,7 +550,8 @@ get_metadata_findings <- function(project) {
       .data$field_type %in% c("radio", "dropdown", "checkbox"),
       get_is_missing(.data$select_choices_or_calculations)
     ) |>
-    transmute(
+    mutate(
+      .keep = "none",
       check = "metadata",
       issue = "missing_choice_definition",
       severity = "warning",
@@ -588,7 +592,8 @@ get_high_risk_text_findings <- function(metadata) {
     )
 
   risky |>
-    transmute(
+    mutate(
+      .keep = "none",
       check = "metadata",
       issue = "high_risk_free_text",
       severity = "info",
@@ -807,7 +812,8 @@ get_operational_findings <- function(project) {
   }
 
   incomplete_forms |>
-    transmute(
+    mutate(
+      .keep = "none",
       check = "operational",
       issue = "incomplete_form_status",
       severity = "info",
@@ -1195,7 +1201,8 @@ get_validation_metadata <- function(project) {
 get_branching_metadata <- function(project) {
   project$metadata |>
     filter(!get_is_missing(.data$branching_logic)) |>
-    transmute(
+    mutate(
+      .keep = "none",
       .data$field_name,
       .data$form_name,
       .data$branching_logic,

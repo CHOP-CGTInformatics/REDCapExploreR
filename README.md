@@ -62,6 +62,38 @@ article](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-r
 for a comprehensive guide to quality report checks, output elements, and
 assumptions.
 
+## Field relationships
+
+A codebook supplies field definitions, expressions, and event/repeat
+context. Build it once to explore several fields without additional API
+calls or record exports:
+
+``` r
+library(REDCapExploreR)
+relationships <- field_relationship_summary("weight_kg", mock_codebook)
+relationships
+#> <REDCap field relationships>
+#> Field: weight_kg (follow_up)
+#> Upstream: 1 item
+#> Downstream: 6 direct items, 1 indirect item
+#> Reference occurrences across returned chains: 12
+#> Action-tag condition: 1; Calculation: 1; Piping: 4; Field embedding: 1; Default value: 3; Unknown relationship type: 1; Branching logic: 1
+#> Interpretation issues: 3 related metadata locations (see issues).
+#> Coverage: project-wide metadata inspection; see coverage for sources and exclusions.
+#> Indirect connections are reference chains, not predictions of value or behavior changes.
+```
+
+Use `relationships$references` for original expressions and
+`relationships$issues` for related interpretation issues and
+`relationships$coverage` for project-wide inspection scope. The viewer
+uses the same Upstream, Downstream, Summary, and Coverage terms and
+shows all references by default. The bundled codebook includes indirect
+paths, annotations, and interpretation notes around `weight_kg`. Request
+`include_diagnostics = TRUE` when constructing the report to include
+full project-wide diagnostics. View and save with
+`view_field_relationship_summary()` and
+`save_field_relationship_summary()`.
+
 ## Collaboration
 
 We invite you to give feedback and collaborate with us! If you are

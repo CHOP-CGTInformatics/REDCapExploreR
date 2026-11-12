@@ -19,6 +19,8 @@
 #' - `event_instruments`: one row per event/form mapping when available.
 #' - `repeating`: repeating instrument/event configuration when available.
 #' - `project`: project-level summary metadata.
+#' - `definitions`: complete standardized field and project definitions, source
+#'   column availability, and a schema version for relationship analysis.
 #'
 #' @examples
 #' \dontrun{
@@ -56,9 +58,14 @@ get_codebook <- function(project) {
     forms = forms,
     events = project$events,
     event_instruments = project$event_instruments,
-    repeating = project$repeating_instruments |>
-      select(-any_of("redcap_event_name")),
-    project = get_codebook_project_summary(project)
+    repeating = project$repeating_instruments,
+    project = get_codebook_project_summary(project),
+    definitions = list(
+      fields = project$metadata,
+      project = project$project_info,
+      source_columns = project$source_columns,
+      schema_version = 1L
+    )
   )
 
   class(codebook) <- c("redcap_codebook", class(codebook))
@@ -97,13 +104,16 @@ view_codebook <- function(codebook, page_length = 25) {
   get_validate_codebook(codebook)
   get_validate_page_length(page_length)
 
+  viewer_id <- basename(tempfile("redcap-viewer-"))
+  tables <- get_codebook_viewer_tables(codebook)
   browsable(
     tagList(
-      get_codebook_viewer_deps(),
+      get_metadata_viewer_deps(),
       tags$main(
+        id = viewer_id,
         class = "redcap-codebook-viewer",
         tags$header(
-          id = "top",
+          id = paste0(viewer_id, "-top"),
           class = "redcap-codebook-header",
           tags$h1(codebook$project$project_title[[1]]),
           tags$p(
@@ -121,8 +131,8 @@ view_codebook <- function(codebook, page_length = 25) {
           ),
           get_codebook_viewer_summary(codebook)
         ),
-        get_codebook_viewer_navigation(codebook),
-        get_codebook_viewer_sections(codebook, page_length)
+        get_metadata_viewer_navigation(tables, viewer_id),
+        get_metadata_viewer_sections(tables, page_length, viewer_id, project_details = TRUE)
       )
     )
   )
@@ -161,7 +171,7 @@ save_codebook <- function(
   get_validate_html_file(file)
 
   viewer <- view_codebook(codebook, page_length = page_length)
-  get_save_codebook_single_file(viewer, file)
+  get_save_metadata_single_file(viewer, file)
 
   invisible(file)
 }
@@ -191,6 +201,10 @@ get_codebook_project <- function(project) {
   }
 
   list(
+    source_columns = list(
+      fields = get_metadata_names(get_clean_names(names(project$metadata))),
+      project = get_clean_names(names(project$project_info))
+    ),
     metadata = get_standard_metadata(project$metadata),
     events = get_standard_events(project$events),
     event_instruments = get_standard_event_instruments(
@@ -243,24 +257,8 @@ get_codebook_fields <- function(project, forms, choices) {
         .data$repeating_status
       )
     ) |>
-    transmute(
-      .data$field_order,
-      .data$form_order,
-      .data$form_name,
-      .data$form_label,
-      .data$field_name,
-      .data$field_label,
-      .data$field_type,
-      .data$descriptive_field,
-      .data$required_field,
-      .data$identifier,
-      .data$choice_count,
-      .data$choices,
-      .data$validation,
+    mutate(
       branching_logic = as.character(.data$branching_logic),
-      .data$event_count,
-      .data$event_names,
-      .data$repeating_status,
       field_note = if ("field_note" %in% names(metadata)) {
         as.character(.data$field_note)
       } else {
@@ -271,6 +269,12 @@ get_codebook_fields <- function(project, forms, choices) {
       } else {
         NA_character_
       }
+    ) |>
+    select(
+      "field_order", "form_order", "form_name", "form_label", "field_name", "field_label",
+      "field_type", "descriptive_field", "required_field", "identifier", "choice_count",
+      "choices", "validation", "branching_logic", "event_count", "event_names",
+      "repeating_status", "field_note", "matrix_group_name"
     )
 }
 
@@ -464,7 +468,8 @@ get_codebook_repeating_summary <- function(project) {
   repeating_forms <- if ("form_name" %in% names(repeating)) {
     repeating |>
       filter(!get_is_missing(.data$form_name)) |>
-      transmute(
+      mutate(
+        .keep = "none",
         form_name = as.character(.data$form_name),
         repeating_status = "Repeating instrument"
       )
@@ -491,7 +496,8 @@ get_codebook_repeating_summary <- function(project) {
 
     project$event_instruments |>
       filter(.data$redcap_event_name %in% event_names) |>
-      transmute(
+      mutate(
+        .keep = "none",
         form_name = as.character(.data$form_name),
         repeating_status = "Repeating event"
       )
@@ -594,7 +600,7 @@ get_validate_html_file <- function(file) {
   invisible(NULL)
 }
 
-get_save_codebook_single_file <- function(viewer, file) {
+get_save_metadata_single_file <- function(viewer, file) {
   temp_dir <- tempfile("redcap-codebook-save-")
   dir.create(temp_dir)
   on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
@@ -789,9 +795,7 @@ get_codebook_viewer_summary <- function(codebook) {
   )
 }
 
-get_codebook_viewer_navigation <- function(codebook) {
-  tables <- get_codebook_viewer_tables(codebook)
-
+get_metadata_viewer_navigation <- function(tables, viewer_id) {
   tags$nav(
     class = "redcap-codebook-nav",
     role = "tablist",
@@ -807,7 +811,9 @@ get_codebook_viewer_navigation <- function(codebook) {
             ),
             `data-section` = section_id,
             role = "tab",
-            `aria-controls` = section_id,
+            id = paste0(viewer_id, "-tab-", section_id),
+            `aria-controls` = paste0(viewer_id, "-", section_id),
+            tabindex = if (index == 1) "0" else "-1",
             `aria-selected` = if (index == 1) "true" else "false",
             tags$span(
               class = "redcap-codebook-tab-label",
@@ -824,16 +830,16 @@ get_codebook_viewer_navigation <- function(codebook) {
   )
 }
 
-get_codebook_viewer_sections <- function(codebook, page_length) {
-  tables <- get_codebook_viewer_tables(codebook)
-
+get_metadata_viewer_sections <- function(tables, page_length, viewer_id, project_details = FALSE) {
   tagList(map(seq_along(tables), \(index) {
     section_id <- names(tables)[[index]]
     section <- tables[[section_id]]
     data <- get_codebook_viewer_data(section$data)
 
     tags$section(
-      id = section_id,
+      id = paste0(viewer_id, "-", section_id),
+      `data-section` = section_id,
+      `aria-labelledby` = paste0(viewer_id, "-tab-", section_id),
       class = paste(
         "redcap-codebook-section",
         if (index == 1) "is-active" else ""
@@ -852,7 +858,7 @@ get_codebook_viewer_sections <- function(codebook, page_length) {
       ),
       tags$div(
         class = "redcap-codebook-table-panel",
-        if (section_id == "project") {
+        if (project_details && section_id == "project") {
           get_codebook_project_details(section$data)
         } else if (nrow(data) == 0) {
           tags$p(
@@ -860,7 +866,7 @@ get_codebook_viewer_sections <- function(codebook, page_length) {
             get_codebook_empty_message(section_id)
           )
         } else {
-          get_codebook_datatable(data, page_length)
+          get_metadata_datatable(data, page_length)
         }
       )
     )
@@ -1000,24 +1006,22 @@ get_codebook_viewer_cell <- function(value) {
   as.character(value)
 }
 
-get_codebook_datatable <- function(data, page_length) {
+get_metadata_datatable <- function(data, page_length) {
+  options <- list(pageLength = as.integer(page_length), scrollX = TRUE)
   datatable(
     data,
     filter = "top",
     class = "display compact stripe hover redcap-codebook-table",
     rownames = FALSE,
     escape = TRUE,
-    options = list(
-      pageLength = as.integer(page_length),
-      scrollX = TRUE
-    )
+    options = options
   )
 }
 
-get_codebook_viewer_deps <- function() {
+get_metadata_viewer_deps <- function() {
   htmlDependency(
     name = "redcap-codebook-viewer",
-    version = "1.0.0",
+    version = "1.1.0",
     src = c(file = system.file("codebook-viewer", package = "REDCapExploreR")),
     stylesheet = "codebook.css",
     script = "codebook.js"

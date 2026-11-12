@@ -24,6 +24,8 @@ type.
 \item \code{event_instruments}: one row per event/form mapping when available.
 \item \code{repeating}: repeating instrument/event configuration when available.
 \item \code{project}: project-level summary metadata.
+\item \code{definitions}: complete standardized field and project definitions, source
+column availability, and a schema version for relationship analysis.
 }
 }
 \description{

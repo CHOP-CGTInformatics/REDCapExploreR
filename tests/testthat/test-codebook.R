@@ -161,12 +161,14 @@ test_that("build_codebook returns structured codebook tables", {
       "events",
       "event_instruments",
       "repeating",
-      "project"
+      "project",
+      "definitions"
     )
   )
   expect_equal(nrow(codebook$fields), 4)
   expect_equal(nrow(codebook$choices), 5)
-  expect_identical(codebook$repeating, repeating)
+  expect_identical(codebook$repeating[names(repeating)], repeating)
+  expect_equal(codebook$repeating$redcap_event_name, "followup_arm_1")
   expect_equal(codebook$project$project_title, "Example Codebook")
   expect_equal(codebook$project$project_id, 42)
   expect_equal(codebook$project$project_language, "English")
@@ -647,4 +649,35 @@ test_that("save_codebook writes a single HTML file with inlined dependencies", {
   expect_match(output, "redcap-codebook-viewer")
   expect_match(output, "data-redcap-codebook-source")
   expect_false(grepl("saved-codebook_files", output, fixed = TRUE))
+})
+
+test_that("complete codebook definitions preserve expressions and optional metadata", {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "weight_kg", "result", "display"),
+    form_name = "main", field_type = c("text", "text", "calc", "descriptive"),
+    field_label = c("Record", "Weight", "Result", "<b>{weight_kg}</b>"),
+    select_choices_or_calculations = c(NA, NA, " [weight_kg] * 2 ", NA),
+    field_annotation = c(NA, " @READONLY ", NA, NA),
+    section_header = "Header [record_id]", custom_column = "untouched"
+  )
+  book <- build_mock_codebook(metadata)
+  expect_equal(book$definitions$schema_version, 1L)
+  expect_equal(book$definitions$fields$select_choices_or_calculations[3], " [weight_kg] * 2 ")
+  expect_equal(book$definitions$fields$field_annotation[2], " @READONLY ")
+  expect_equal(book$definitions$fields$custom_column, rep("untouched", 4))
+  expect_true("display" %in% book$definitions$fields$field_name)
+  expect_true("section_header" %in% book$definitions$source_columns$fields)
+})
+
+test_that("available blank annotation columns differ from unavailable columns", {
+  metadata <- tibble::tibble(field_name = "record_id", form_name = "main", field_type = "text", field_label = "Record")
+  absent <- build_mock_codebook(metadata)
+  metadata$field_annotation <- NA_character_
+  blank <- build_mock_codebook(metadata)
+  expect_false("field_annotation" %in% absent$definitions$source_columns$fields)
+  expect_true("field_annotation" %in% blank$definitions$source_columns$fields)
+  expect_true(any(field_relationship_summary("record_id", absent)$coverage$status == "unavailable"))
+  coverage <- field_relationship_summary("record_id", blank)$coverage
+  expect_equal(coverage$status[coverage$metadata_column %in% "field_annotation"], "available")
+  expect_match(coverage$note[coverage$metadata_column %in% "field_annotation"], "0 nonblank expressions")
 })
