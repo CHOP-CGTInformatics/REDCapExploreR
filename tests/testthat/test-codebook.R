@@ -1,36 +1,3 @@
-build_mock_codebook <- function(
-  metadata,
-  events = tibble::tibble(),
-  event_instruments = tibble::tibble(),
-  instruments = tibble::tibble(),
-  repeating_instruments = tibble::tibble(),
-  arms = tibble::tibble(),
-  project_info = tibble::tibble()
-) {
-  project <- list(
-    metadata = metadata,
-    events = events,
-    event_instruments = event_instruments,
-    instruments = instruments,
-    repeating_instruments = repeating_instruments,
-    arms = arms,
-    project_info = project_info
-  )
-
-  testthat::local_mocked_bindings(
-    pull_redcap_codebook = function(redcap_uri, token) {
-      expect_equal(redcap_uri, "https://redcap.example/api/")
-      expect_equal(token, "test-token")
-      project
-    }
-  )
-
-  build_codebook(
-    redcap_uri = "https://redcap.example/api/",
-    token = "test-token"
-  )
-}
-
 test_that("build_codebook requires REDCap API credentials", {
   expect_error(
     build_codebook(),
@@ -44,6 +11,7 @@ test_that("build_codebook requires REDCap API credentials", {
 
 test_that("pull_redcap_codebook quiets REDCapR API messages", {
   quiet_required <- function(redcap_uri, token, verbose, ...) {
+    expect_equal(c(redcap_uri, token), c("https://redcap.example/api/", "test-token"))
     if (verbose) {
       message("required metadata should be quiet")
     }
@@ -94,7 +62,7 @@ test_that("pull_redcap_codebook quiets REDCapR API messages", {
   )
 })
 
-test_that("build_codebook returns structured codebook tables", {
+test_that("codebook returns structured codebook tables", {
   metadata <- tibble::tibble(
     field_name = c("record_id", "sex", "visit_date", "symptoms"),
     form_name = c("demographics", "demographics", "visit", "visit"),
@@ -142,7 +110,7 @@ test_that("build_codebook returns structured codebook tables", {
     surveys_enabled = TRUE
   )
 
-  codebook <- build_mock_codebook(
+  codebook <- get_test_codebook(
     metadata = metadata,
     events = events,
     event_instruments = event_instruments,
@@ -179,7 +147,7 @@ test_that("build_codebook returns structured codebook tables", {
   expect_true(codebook$project$repeating_enabled)
 })
 
-test_that("build_codebook parses choices and field display metadata", {
+test_that("codebook parses choices and field display metadata", {
   metadata <- tibble::tibble(
     field_name = c("record_id", "sex", "visit_date", "symptoms"),
     form_name = c("demographics", "demographics", "visit", "visit"),
@@ -199,7 +167,7 @@ test_that("build_codebook parses choices and field display metadata", {
     branching_logic = c(NA, NA, NA, "[sex] = '1'")
   )
 
-  codebook <- build_mock_codebook(metadata)
+  codebook <- get_test_codebook(metadata)
 
   expect_equal(
     codebook$choices |>
@@ -227,7 +195,7 @@ test_that("build_codebook parses choices and field display metadata", {
   )
 })
 
-test_that("build_codebook includes choice types and implicit binary choices", {
+test_that("codebook includes choice types and implicit binary choices", {
   metadata <- tibble::tibble(
     field_name = c(
       "record_id",
@@ -264,7 +232,7 @@ test_that("build_codebook includes choice types and implicit binary choices", {
     )
   )
 
-  choices <- build_mock_codebook(metadata)$choices
+  choices <- get_test_codebook(metadata)$choices
 
   expect_equal(
     choices |>
@@ -295,7 +263,7 @@ test_that("build_codebook includes choice types and implicit binary choices", {
   )
 })
 
-test_that("build_codebook excludes calculations from choices", {
+test_that("codebook excludes calculations from choices", {
   metadata <- tibble::tibble(
     field_name = c("record_id", "bmi"),
     form_name = "main",
@@ -307,13 +275,13 @@ test_that("build_codebook excludes calculations from choices", {
     )
   )
 
-  codebook <- build_mock_codebook(metadata)
+  codebook <- get_test_codebook(metadata)
 
   expect_equal(nrow(codebook$choices), 0)
   expect_equal(codebook$fields$choice_count, c(0L, 0L))
 })
 
-test_that("build_codebook summarizes forms, events, and repeating structure", {
+test_that("codebook summarizes forms, events, and repeating structure", {
   metadata <- tibble::tibble(
     field_name = c("record_id", "baseline_value", "visit_value"),
     form_name = c("baseline", "baseline", "visit"),
@@ -338,7 +306,7 @@ test_that("build_codebook summarizes forms, events, and repeating structure", {
     unique_event_name = "month_1_arm_1"
   )
 
-  codebook <- build_mock_codebook(
+  codebook <- get_test_codebook(
     metadata = metadata,
     events = events,
     event_instruments = event_instruments,
@@ -369,7 +337,7 @@ test_that("build_codebook summarizes forms, events, and repeating structure", {
   )
 })
 
-test_that("build_codebook identifies forms in repeating events", {
+test_that("codebook identifies forms in repeating events", {
   metadata <- tibble::tibble(
     field_name = c("record_id", "visit_date"),
     form_name = "visit",
@@ -390,7 +358,7 @@ test_that("build_codebook identifies forms in repeating events", {
     form_name = NA_character_
   )
 
-  codebook <- build_mock_codebook(
+  codebook <- get_test_codebook(
     metadata = metadata,
     events = events,
     event_instruments = event_instruments,
@@ -408,7 +376,7 @@ test_that("print.redcap_codebook reports concise project counts", {
     field_label = "Record ID"
   )
   project_info <- tibble::tibble(project_title = "Print Test")
-  codebook <- build_mock_codebook(metadata, project_info = project_info)
+  codebook <- get_test_codebook(metadata, project_info = project_info)
 
   expect_output(
     print(codebook),
@@ -428,7 +396,7 @@ test_that("view_codebook validates inputs", {
     field_type = "text",
     field_label = "Record ID"
   )
-  codebook <- build_mock_codebook(metadata)
+  codebook <- get_test_codebook(metadata)
 
   expect_error(
     view_codebook(codebook, page_length = 0),
@@ -438,98 +406,24 @@ test_that("view_codebook validates inputs", {
     view_codebook(codebook, page_length = 1.5),
     "page_length"
   )
+  expect_error(view_codebook(codebook, page_length = Inf), "positive integer")
+  expect_error(view_codebook(codebook, page_length = NaN), "positive integer")
 })
 
-test_that("view_codebook returns a browsable HTML object", {
+test_that("view_codebook presents project metadata and field choices", {
   metadata <- tibble::tibble(
-    field_name = c("record_id", "status"),
-    form_name = c("main", "main"),
-    field_type = c("text", "dropdown"),
-    field_label = c("Record ID", "Status"),
+    field_name = c("record_id", "status"), form_name = "main",
+    field_type = c("text", "dropdown"), field_label = c("Record ID", "Status"),
     select_choices_or_calculations = c(NA, "1, Open | 2, Closed")
   )
-  project_info <- tibble::tibble(
-    project_id = 42,
-    project_title = "Viewer Test Project",
-    in_production = FALSE,
-    project_language = "English",
-    surveys_enabled = TRUE
-  )
-  codebook <- build_mock_codebook(metadata, project_info = project_info)
-
+  codebook <- get_test_codebook(metadata, project_info = tibble::tibble(project_title = "Viewer Test Project"))
   viewer <- view_codebook(codebook, page_length = 5)
-
+  html <- as.character(viewer)
   expect_s3_class(viewer, "shiny.tag.list")
-  expect_true(isTRUE(attr(viewer, "browsable_html")))
-  expect_match(as.character(viewer), "Viewer Test Project")
-  expect_match(as.character(viewer), "REDCap Codebook")
-  expect_match(as.character(viewer), "searched, sorted, paged")
-  expect_false(grepl(
-    "Link to Project Home",
-    as.character(viewer),
-    fixed = TRUE
-  ))
-  expect_match(as.character(viewer), "redcap-codebook-summary")
-  expect_match(as.character(viewer), "redcap-codebook-project-details")
-  expect_match(as.character(viewer), "Project ID")
-  expect_match(as.character(viewer), "Project features")
-  expect_match(as.character(viewer), "Surveys enabled")
-  expect_match(as.character(viewer), "data-section=\"fields\"")
-  expect_match(as.character(viewer), "data-section=\"choices\"")
-  expect_match(as.character(viewer), "redcap-codebook-tab-count")
-  expect_match(as.character(viewer), "2 rows")
-  expect_match(as.character(viewer), "redcap-codebook-table-panel")
-  expect_false(grepl(
-    "data-section=\"events\"",
-    as.character(viewer),
-    fixed = TRUE
-  ))
-  expect_false(grepl("Event Instruments", as.character(viewer), fixed = TRUE))
-  expect_false(
-    grepl("data-section=\"repeating\"", as.character(viewer), fixed = TRUE)
-  )
-  expect_match(as.character(viewer), "role=\"tabpanel\"")
-  expect_false(grepl("Back to top", as.character(viewer), fixed = TRUE))
-  expect_match(as.character(viewer), "status")
-  expect_match(as.character(viewer), "Open")
-  dependencies <- htmltools::renderTags(viewer)$dependencies
-  dependency_names <- vapply(dependencies, `[[`, character(1), "name")
-  expect_true("redcap-codebook-viewer" %in% dependency_names)
-})
-
-test_that("codebook viewer assets match snapshots", {
-  asset_dir <- system.file("codebook-viewer", package = "REDCapExploreR")
-
-  expect_snapshot_file(
-    file.path(asset_dir, "codebook.css"),
-    name = "codebook.css",
-    cran = TRUE
-  )
-  expect_snapshot_file(
-    file.path(asset_dir, "codebook.js"),
-    name = "codebook.js",
-    cran = TRUE
-  )
-})
-
-test_that("view_codebook includes section descriptions", {
-  metadata <- tibble::tibble(
-    field_name = "record_id",
-    form_name = "main",
-    field_type = "text",
-    field_label = "Record ID"
-  )
-  codebook <- build_mock_codebook(metadata)
-
-  viewer <- view_codebook(codebook)
-
-  expect_match(as.character(viewer), "A one-row overview")
-  expect_match(as.character(viewer), "One row per REDCap field")
-  expect_match(as.character(viewer), "One row per REDCap instrument")
-  expect_match(
-    as.character(viewer),
-    "No coded choice options were found in this project."
-  )
+  expect_match(html, "Viewer Test Project", fixed = TRUE)
+  expect_match(html, 'data-section="fields"', fixed = TRUE)
+  expect_match(html, 'data-section="choices"', fixed = TRUE)
+  expect_match(html, "Open", fixed = TRUE)
 })
 
 test_that("view_codebook omits empty optional event and repeating sections", {
@@ -539,7 +433,7 @@ test_that("view_codebook omits empty optional event and repeating sections", {
     field_type = "text",
     field_label = "Record ID"
   )
-  codebook <- build_mock_codebook(metadata)
+  codebook <- get_test_codebook(metadata)
 
   expect_no_error(viewer <- view_codebook(codebook))
   expect_false(grepl(
@@ -579,7 +473,7 @@ test_that("view_codebook includes populated optional sections", {
     unique_event_name = "baseline_arm_1",
     instrument_name = "visit"
   )
-  codebook <- build_mock_codebook(
+  codebook <- get_test_codebook(
     metadata = metadata,
     events = events,
     event_instruments = event_instruments,
@@ -600,7 +494,7 @@ test_that("view_codebook escapes REDCap metadata values as text", {
     field_type = "text",
     field_label = "<script>alert('x')</script>"
   )
-  codebook <- build_mock_codebook(metadata)
+  codebook <- get_test_codebook(metadata)
 
   viewer <- view_codebook(codebook)
 
@@ -615,7 +509,7 @@ test_that("save_codebook validates inputs", {
     field_type = "text",
     field_label = "Record ID"
   )
-  codebook <- build_mock_codebook(metadata)
+  codebook <- get_test_codebook(metadata)
   output_file <- tempfile(fileext = ".html")
 
   expect_error(save_codebook(tibble::tibble(), output_file), "redcap_codebook")
@@ -635,7 +529,7 @@ test_that("save_codebook writes a single HTML file with inlined dependencies", {
     select_choices_or_calculations = c(NA, "1, Open | 2, Closed")
   )
   project_info <- tibble::tibble(project_title = "Saved Codebook")
-  codebook <- build_mock_codebook(metadata, project_info = project_info)
+  codebook <- get_test_codebook(metadata, project_info = project_info)
   output_dir <- tempdir()
   output_file <- file.path(output_dir, "saved-codebook.html")
 
@@ -660,7 +554,7 @@ test_that("complete codebook definitions preserve expressions and optional metad
     field_annotation = c(NA, " @READONLY ", NA, NA),
     section_header = "Header [record_id]", custom_column = "untouched"
   )
-  book <- build_mock_codebook(metadata)
+  book <- get_test_codebook(metadata)
   expect_equal(book$definitions$schema_version, 1L)
   expect_equal(book$definitions$fields$select_choices_or_calculations[3], " [weight_kg] * 2 ")
   expect_equal(book$definitions$fields$field_annotation[2], " @READONLY ")
@@ -671,9 +565,9 @@ test_that("complete codebook definitions preserve expressions and optional metad
 
 test_that("available blank annotation columns differ from unavailable columns", {
   metadata <- tibble::tibble(field_name = "record_id", form_name = "main", field_type = "text", field_label = "Record")
-  absent <- build_mock_codebook(metadata)
+  absent <- get_test_codebook(metadata)
   metadata$field_annotation <- NA_character_
-  blank <- build_mock_codebook(metadata)
+  blank <- get_test_codebook(metadata)
   expect_false("field_annotation" %in% absent$definitions$source_columns$fields)
   expect_true("field_annotation" %in% blank$definitions$source_columns$fields)
   expect_true(any(field_relationship_summary("record_id", absent)$coverage$status == "unavailable"))

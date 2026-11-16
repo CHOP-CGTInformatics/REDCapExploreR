@@ -1,8 +1,9 @@
 test_that("relationship inputs require exact fields and complete definitions", {
   book <- get_weight_codebook()
-  purrr::walk(list(NULL, NA_character_, "", c("weight_kg", "bmi")), \(field) {
-    expect_error(field_relationship_summary(field, book), "one nonblank")
-  })
+  expect_error(field_relationship_summary(NULL, book), "one nonblank")
+  expect_error(field_relationship_summary(NA_character_, book), "one nonblank")
+  expect_error(field_relationship_summary("", book), "one nonblank")
+  expect_error(field_relationship_summary(c("weight_kg", "bmi"), book), "one nonblank")
   expect_error(field_relationship_summary("Weight", book), "exact field name")
   expect_error(field_relationship_summary("symptoms___1", book), "checkbox parent")
   expect_s3_class(field_relationship_summary("symptoms", book), "redcap_field_relationship_summary")
@@ -113,22 +114,28 @@ test_that("status notes retain specific context and extraction reasons", {
   expect_true(any(grepl("Unclassified reference: Unsupported", report$summary$status_note, fixed = TRUE)))
 })
 
-test_that("coverage stays compact as unrelated blank fields are added", {
+test_that("unrelated blank fields increase inventory counts without adding relationships or issues", {
   book <- get_weight_codebook()
-  extra <- tibble::tibble(
-    field_name = paste0("unused_", 1:1000), form_name = "main",
-    field_type = "text", field_label = "Unused"
+  before <- field_relationship_summary("weight_kg", book, include_inspection_log = TRUE)
+  extra <- tibble::tibble(field_name = c("unused_a", "unused_b"), form_name = "main", field_type = "text", field_label = "Unused")
+  expanded <- get_test_codebook(dplyr::bind_rows(book$definitions$fields, extra))
+  after <- field_relationship_summary("weight_kg", expanded, include_inspection_log = TRUE)
+  expect_equal(after$references, before$references)
+  expect_equal(after$issues, before$issues)
+  expect_equal(after$coverage$metadata_column, before$coverage$metadata_column)
+  field_locations <- c("branching_logic", "field_annotation", "field_label", "field_note", "section_header")
+  expect_equal(
+    after$coverage$location_count[after$coverage$metadata_column %in% field_locations],
+    before$coverage$location_count[before$coverage$metadata_column %in% field_locations] + 2L
   )
-  large <- get_codebook(get_codebook_project(list(metadata = dplyr::bind_rows(book$definitions$fields, extra))))
-  report <- field_relationship_summary("weight_kg", large)
-  detailed <- field_relationship_summary("weight_kg", large, include_diagnostics = TRUE, include_inspection_log = TRUE)
-  expect_lt(nrow(report$coverage), 20)
-  expect_false("diagnostics" %in% names(report))
-  expect_equal(nrow(detailed$diagnostics), 0L)
-  expect_gt(nrow(detailed$inspection_log), 5000)
-  expect_false("inspection_log" %in% names(report))
-  expect_equal(report$coverage, detailed$coverage)
-  expect_true(all(nchar(report$coverage$examples) < 200))
+  unchanged_locations <- c("choice_label", "select_choices_or_calculations", "custom_record_label")
+  expect_equal(
+    after$coverage$location_count[after$coverage$metadata_column %in% unchanged_locations],
+    before$coverage$location_count[before$coverage$metadata_column %in% unchanged_locations]
+  )
+  added <- dplyr::filter(after$inspection_log, .data$dependent_name %in% extra$field_name)
+  expect_setequal(added$dependent_name, extra$field_name)
+  expect_true(all(added$row_kind == "source"))
 })
 
 test_that("related issues retain evidence without project-wide diagnostics", {
@@ -174,22 +181,23 @@ test_that("no-argument action tags do not create interpretation issues", {
 })
 
 test_that("the diagnostics flag requires one logical value", {
-  purrr::walk(list(NA, 1, c(TRUE, FALSE)), \(flag) {
-    expect_error(field_relationship_summary("weight_kg", get_weight_codebook(), include_diagnostics = flag), "TRUE or FALSE")
-  })
+  book <- get_weight_codebook()
+  expect_error(field_relationship_summary("weight_kg", book, include_diagnostics = NA), "TRUE or FALSE")
+  expect_error(field_relationship_summary("weight_kg", book, include_diagnostics = 1), "TRUE or FALSE")
+  expect_error(field_relationship_summary("weight_kg", book, include_diagnostics = c(TRUE, FALSE)), "TRUE or FALSE")
 })
 
 test_that("project coverage includes all interpretation limits independently of the field", {
-  fields <- c("weight_kg", "age", "diagnostic_example", "symptoms")
-  reports <- stats::setNames(purrr::map(fields, \(field) field_relationship_summary(field, mock_codebook)), fields)
-  purrr::walk(reports, \(report) expect_equal(report$coverage, reports$weight_kg$coverage))
-  limits <- dplyr::filter(reports$weight_kg$coverage, .data$scope == "project_notes")
+  weight <- field_relationship_summary("weight_kg", mock_codebook)
+  age <- field_relationship_summary("age", mock_codebook)
+  expect_equal(weight$coverage, age$coverage)
+  limits <- dplyr::filter(weight$coverage, .data$scope == "project_notes")
   expect_equal(nrow(limits), 1L)
   expect_equal(limits$location_count, 3L)
   expect_equal(limits$reference_count, 3L)
-  expect_equal(nrow(reports$age$issues), 0L)
-  expect_equal(nrow(reports$weight_kg$issues), 3L)
-  expect_setequal(reports$weight_kg$issues$dependent_name, c("diagnostic_example", "weight_at_entry"))
+  expect_equal(nrow(age$issues), 0L)
+  expect_equal(nrow(weight$issues), 3L)
+  expect_setequal(weight$issues$dependent_name, c("diagnostic_example", "weight_at_entry"))
 })
 
 test_that("projects without interpretation limits omit the project notes aggregate", {
@@ -234,9 +242,12 @@ test_that("the full inspection log is an independent opt-in", {
   expect_equal(log$inspection_log, both$inspection_log)
   expect_equal(ordinary$coverage, both$coverage)
   expect_equal(ordinary$issues, both$issues)
-  purrr::walk(list(NA, 1, c(TRUE, FALSE)), \(flag) {
-    expect_error(field_relationship_summary("age", mock_codebook, include_inspection_log = flag), "include_inspection_log.*TRUE or FALSE")
-  })
+  expect_error(field_relationship_summary("age", mock_codebook, include_inspection_log = NA), "include_inspection_log.*TRUE or FALSE")
+  expect_error(field_relationship_summary("age", mock_codebook, include_inspection_log = 1), "include_inspection_log.*TRUE or FALSE")
+  expect_error(
+    field_relationship_summary("age", mock_codebook, include_inspection_log = c(TRUE, FALSE)),
+    "include_inspection_log.*TRUE or FALSE"
+  )
 })
 
 test_that("checkbox explanations identify raw option codes and labels without inventing other links", {

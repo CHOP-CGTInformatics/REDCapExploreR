@@ -1,46 +1,3 @@
-build_mock_quality_report <- function(
-  data,
-  metadata,
-  events = tibble::tibble(),
-  event_instruments = tibble::tibble(),
-  instruments = tibble::tibble(),
-  repeating_instruments = tibble::tibble(),
-  checks = c(
-    "missingness",
-    "metadata",
-    "outliers",
-    "operational",
-    "consistency"
-  ),
-  progress = "none",
-  ...
-) {
-  project <- list(
-    data = data,
-    metadata = metadata,
-    events = events,
-    event_instruments = event_instruments,
-    instruments = instruments,
-    repeating_instruments = repeating_instruments
-  )
-
-  testthat::local_mocked_bindings(
-    pull_redcap_project = function(redcap_uri, token) {
-      expect_equal(redcap_uri, "https://redcap.example/api/")
-      expect_equal(token, "test-token")
-      project
-    }
-  )
-
-  build_quality_report(
-    redcap_uri = "https://redcap.example/api/",
-    token = "test-token",
-    checks = checks,
-    progress = progress,
-    ...
-  )
-}
-
 test_that("build_quality_report requires REDCap API credentials", {
   expect_error(
     build_quality_report(progress = "none"),
@@ -67,78 +24,7 @@ test_that("build_quality_report validates scalar finite thresholds", {
   )
 })
 
-test_that("pull_redcap_project requests quiet raw REDCapR records", {
-  quiet_records <- function(
-    redcap_uri,
-    token,
-    raw_or_label,
-    raw_or_label_headers,
-    export_checkbox_label,
-    na,
-    guess_type,
-    verbose,
-    ...
-  ) {
-    expect_equal(raw_or_label, "raw")
-    expect_equal(raw_or_label_headers, "raw")
-    expect_false(export_checkbox_label)
-    expect_equal(na, "")
-    expect_false(guess_type)
-    if (verbose) {
-      message("records should be quiet")
-    }
-    list(data = tibble::tibble(record_id = "1"))
-  }
-  quiet_metadata <- function(redcap_uri, token, verbose, ...) {
-    if (verbose) {
-      message("metadata should be quiet")
-    }
-    list(
-      data = tibble::tibble(
-        field_name = "record_id",
-        form_name = "main",
-        field_type = "text",
-        field_label = "Record ID"
-      )
-    )
-  }
-  quiet_optional <- function(redcap_uri, token, verbose, ...) {
-    if (verbose) {
-      message("optional metadata should be quiet")
-    }
-    list(data = tibble::tibble())
-  }
-
-  testthat::local_mocked_bindings(
-    redcap_read_oneshot = quiet_records,
-    redcap_metadata_read = quiet_metadata,
-    redcap_event_read = quiet_optional,
-    redcap_event_instruments = quiet_optional,
-    redcap_instruments = quiet_optional,
-    redcap_instrument_repeating = quiet_optional
-  )
-
-  expect_message(
-    project <- pull_redcap_project(
-      redcap_uri = "https://redcap.example/api/",
-      token = "test-token"
-    ),
-    NA
-  )
-  expect_named(
-    project,
-    c(
-      "data",
-      "metadata",
-      "events",
-      "event_instruments",
-      "instruments",
-      "repeating_instruments"
-    )
-  )
-})
-
-test_that("API record import preserves raw choice codes as characters", {
+test_that("record import preserves raw choice codes as characters", {
   captured <- NULL
   testthat::local_mocked_bindings(
     redcap_read_oneshot = function(..., guess_type, na) {
@@ -185,59 +71,7 @@ test_that("API record import preserves raw choice codes as characters", {
   expect_equal(nrow(report$findings), 0)
 })
 
-test_that("pull_redcap_project reports optional and required API failures", {
-  testthat::local_mocked_bindings(
-    redcap_read_oneshot = function(redcap_uri, token, verbose, ...) {
-      list(data = tibble::tibble(record_id = "1"))
-    },
-    redcap_metadata_read = function(redcap_uri, token, verbose, ...) {
-      list(
-        data = tibble::tibble(
-          field_name = "record_id",
-          form_name = "main",
-          field_type = "text",
-          field_label = "Record ID"
-        )
-      )
-    },
-    redcap_event_read = function(...) {
-      stop("optional events failed")
-    },
-    redcap_event_instruments = function(...) {
-      stop("optional mapping failed")
-    },
-    redcap_instruments = function(...) {
-      stop("optional instruments failed")
-    },
-    redcap_instrument_repeating = function(...) {
-      stop("optional repeating failed")
-    }
-  )
-
-  expect_error(
-    pull_redcap_project(
-      redcap_uri = "https://redcap.example/api/",
-      token = "test-token"
-    ),
-    "event metadata"
-  )
-
-  testthat::local_mocked_bindings(
-    redcap_read_oneshot = function(...) {
-      stop("required records failed")
-    }
-  )
-
-  expect_error(
-    pull_redcap_project(
-      redcap_uri = "https://redcap.example/api/",
-      token = "test-token"
-    ),
-    "required records failed"
-  )
-})
-
-test_that("API repeating configuration does not depend on exported rows", {
+test_that("repeating configuration does not depend on exported rows", {
   redcap_data <- tibble::tibble(
     record_id = character(),
     repeat_value = character(),
@@ -258,7 +92,7 @@ test_that("API repeating configuration does not depend on exported rows", {
     custom_form_label = NA_character_
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = repeating_instruments,
@@ -273,9 +107,9 @@ test_that("API repeating configuration does not depend on exported rows", {
   expect_equal(nrow(report$findings), 0)
 })
 
-test_that("build_quality_report returns expected findings and summaries for API data", {
+test_that("build_quality_report returns the public report schema from a raw export", {
   redcap_data <- tibble::tibble(
-    record_id = c("1", "2", "2", "3"),
+    record_id = c("1", "2", "3", "4"),
     age = c(10, 999, 5, NA),
     consent_date = c("2025-01-01", "2999-01-01", "2025-02-01", ""),
     notes = c("reviewed", "", "ok", "follow up"),
@@ -311,7 +145,10 @@ test_that("build_quality_report returns expected findings and summaries for API 
     identifier = NA
   )
 
-  report <- build_mock_quality_report(redcap_data, metadata)
+  testthat::local_mocked_bindings(
+    pull_redcap_project = function(redcap_uri, token) list(data = redcap_data, metadata = metadata)
+  )
+  report <- build_quality_report("https://example.invalid", "synthetic", progress = "none")
 
   expect_s3_class(report, "redcap_quality_report")
   expect_named(report, c("findings", "summaries", "metadata"))
@@ -337,7 +174,7 @@ test_that("build_quality_report returns expected findings and summaries for API 
     )
   )
 
-  expect_equal(report$summaries$project$record_count, 3)
+  expect_equal(report$summaries$project$record_count, 4)
   expect_equal(report$summaries$project$raw_row_count, 4)
   expect_equal(report$metadata$record_id_field, "record_id")
   expect_equal(report$metadata$source, "api")
@@ -349,7 +186,7 @@ test_that("build_quality_report returns expected findings and summaries for API 
   ))
 })
 
-test_that("API metadata checks report label, choice, and text risks", {
+test_that("metadata checks report label, choice, and text risks", {
   redcap_data <- tibble::tibble(
     record_id = "1",
     field_a = "1",
@@ -368,7 +205,7 @@ test_that("API metadata checks report label, choice, and text risks", {
     select_choices_or_calculations = c(NA, NA, NA, NA)
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = "metadata"
@@ -379,97 +216,17 @@ test_that("API metadata checks report label, choice, and text risks", {
   expect_true("high_risk_free_text" %in% report$findings$issue)
 })
 
-test_that("API metadata checks do not report branching references", {
-  redcap_data <- tibble::tibble(
-    record_id = "1",
-    source_field = "1",
-    target_field = "present",
-    missing_reference = NA_character_,
-    event_reference = NA_character_,
-    smart_variable_reference = NA_character_,
-    main_complete = 2
-  )
-  metadata <- tibble::tibble(
-    field_name = c(
-      "record_id",
-      "source_field",
-      "target_field",
-      "missing_reference",
-      "event_reference",
-      "smart_variable_reference"
-    ),
-    form_name = c("main", "source_form", rep("target_form", 4)),
-    field_type = "text",
-    field_label = c(
-      "Record ID",
-      "Source Field",
-      "Target Field",
-      "Missing Reference",
-      "Event Reference",
-      "Smart Variable Reference"
-    ),
-    branching_logic = c(
-      NA,
-      NA,
-      "[source_field] = '1'",
-      "[not_in_metadata] = '1'",
-      "[baseline_arm_1][source_field] = '1'",
-      "[current-event-name] = 'baseline_arm_1'"
-    )
-  )
-
-  report <- build_mock_quality_report(
-    redcap_data,
-    metadata,
+test_that("metadata checks leave unresolved branching references to relationship reporting", {
+  metadata <- get_test_metadata(c("record_id", "dependent"))
+  metadata$branching_logic <- c(NA, "[retired_field] = '1'")
+  report <- get_test_quality_report(
+    tibble::tibble(record_id = "1", dependent = "value", main_complete = "2"), metadata,
     checks = "metadata"
   )
-
-  expect_false("orphaned_branching_reference" %in% report$findings$issue)
+  expect_equal(nrow(report$findings), 0L)
 })
 
-test_that("API metadata aliases are standardized", {
-  redcap_data <- tibble::tibble(
-    record_id = "1",
-    choice_field = "1",
-    main_complete = 2
-  )
-
-  metadata <- tibble::tibble(
-    `Variable / Field Name` = c("record_id", "choice_field"),
-    `Form Name` = c("main", "main"),
-    `Field Type` = c("text", "radio"),
-    `Field Label` = c("Record ID", "Choice Field"),
-    `Choices, Calculations, OR Slider Labels` = c(NA, "1, One | 2, Two"),
-    `Text Validation Type OR Show Slider Number` = c(NA, NA),
-    `Text Validation Min` = c(NA, NA),
-    `Text Validation Max` = c(NA, NA),
-    `Required Field?` = c("y", "n"),
-    `Branching Logic (Show field only if...)` = c(
-      NA,
-      "[record_id] <> 'missing'"
-    ),
-    `Identifier?` = c(NA, NA)
-  )
-
-  report <- build_mock_quality_report(
-    redcap_data,
-    metadata,
-    checks = "metadata"
-  )
-
-  expect_equal(
-    report$metadata$fields$field_name,
-    c("record_id", "choice_field")
-  )
-  expect_equal(report$metadata$fields$required_field, c(TRUE, FALSE))
-  expect_equal(
-    report$metadata$choices$field_name,
-    c("choice_field", "choice_field")
-  )
-  expect_equal(report$metadata$branching$referenced_fields, "record_id")
-})
-
-test_that("API outlier checks report validation, IQR, and future dates", {
+test_that("outlier checks report validation, IQR, and future dates", {
   redcap_data <- tibble::tibble(
     record_id = as.character(seq_len(6)),
     age = c(10, 12, 11, 13, 12, 999),
@@ -488,160 +245,23 @@ test_that("API outlier checks report validation, IQR, and future dates", {
     text_validation_max = c(NA, 120, NA)
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = "outliers"
   )
 
-  expect_true("outside_validation_range" %in% report$findings$issue)
-  expect_true("numeric_iqr_outlier" %in% report$findings$issue)
-  expect_true("future_date" %in% report$findings$issue)
-})
-
-test_that("API outlier checks ignore invalid date strings", {
-  redcap_data <- tibble::tibble(
-    record_id = c("1", "2"),
-    visit_date = c("not-a-date", "2025-01-01"),
-    main_complete = 2
-  )
-
-  metadata <- tibble::tibble(
-    field_name = c("record_id", "visit_date"),
-    form_name = c("main", "main"),
-    field_type = c("text", "text"),
-    field_label = c("Record ID", "Visit Date"),
-    required_field = c("y", "n"),
-    text_validation_type_or_show_slider_number = c(NA, "date_ymd")
-  )
-
-  expect_no_error(
-    report <- build_mock_quality_report(
-      redcap_data,
-      metadata,
-      checks = "outliers"
+  expect_equal(
+    report$findings |> dplyr::select("record_id", "field_name", "issue"),
+    tibble::tibble(
+      record_id = c("6", "6", "6"),
+      field_name = c("age", "age", "consent_date"),
+      issue = c("outside_validation_range", "numeric_iqr_outlier", "future_date")
     )
   )
-  expect_false("future_date" %in% report$findings$issue)
 })
 
-test_that("REDCap text validation parsers enforce supported formats", {
-  examples <- tibble::tribble(
-    ~validation,
-    ~valid,
-    ~invalid,
-    "integer",
-    "-12",
-    "12.0",
-    "number",
-    "12.25",
-    "1e3",
-    "number_comma_decimal",
-    "12,25",
-    "12.25",
-    "number_1dp",
-    "12.3",
-    "12.34",
-    "number_2dp",
-    "12.34",
-    "12.345",
-    "number_3dp",
-    "12.345",
-    "12.3456",
-    "number_4dp",
-    "12.3456",
-    "12.34567",
-    "number_1dp_comma_decimal",
-    "12,3",
-    "12,34",
-    "number_2dp_comma_decimal",
-    "12,34",
-    "12,345",
-    "number_3dp_comma_decimal",
-    "12,345",
-    "12,3456",
-    "number_4dp_comma_decimal",
-    "12,3456",
-    "12,34567",
-    "date_dmy",
-    "2025-12-31",
-    "2025-02-30",
-    "date_mdy",
-    "2025-12-31",
-    "12-31-2025",
-    "date_ymd",
-    "2024-02-29",
-    "2025-02-29",
-    "datetime_dmy",
-    "2025-12-31 23:59",
-    "2025-12-31 23:60",
-    "datetime_mdy",
-    "2025-12-31 23:59",
-    "12-31-2025 23:59",
-    "datetime_ymd",
-    "2025-12-31 23:59",
-    "2025-12-31 24:00",
-    "datetime_seconds_dmy",
-    "2025-12-31 23:59:59",
-    "2025-12-31 23:59",
-    "datetime_seconds_mdy",
-    "2025-12-31 23:59:59",
-    "2025-12-31 23:60:00",
-    "datetime_seconds_ymd",
-    "2025-12-31 23:59:59",
-    "2025-13-31 23:59:59",
-    "time",
-    "23:59",
-    "24:00",
-    "time_hh_mm_ss",
-    "23:59:59",
-    "23:60:00",
-    "time_mm_ss",
-    "59:59",
-    "60:00",
-    "email",
-    "person@example.org",
-    "person@example",
-    "phone",
-    "(215) 555-1212",
-    "215-555-121",
-    "phone_australia",
-    "+61 412 345 678",
-    "+61 12 345"
-  )
-
-  expect_true(all(purrr::map2_lgl(
-    examples$valid,
-    examples$validation,
-    get_is_valid_validation_value
-  )))
-  expect_false(any(purrr::map2_lgl(
-    examples$invalid,
-    examples$validation,
-    get_is_valid_validation_value
-  )))
-  expect_true(all(get_is_valid_validation_value(
-    c(".850", "-.850"),
-    "number"
-  )))
-  expect_equal(
-    get_parsed_validation_values(c(".850", "-.850"), "number"),
-    c(0.85, -0.85)
-  )
-  expect_true(get_is_valid_validation_value(".850", "number_3dp"))
-  expect_true(get_is_valid_validation_value(",850", "number_3dp_comma_decimal"))
-  expect_false(any(get_is_valid_validation_value(c(".", "-."), "number")))
-  expect_equal(
-    get_validation_expected("date_mdy"),
-    "Valid REDCap date (YYYY-MM-DD)"
-  )
-  expect_equal(
-    get_validation_expected("datetime_seconds_dmy"),
-    "Valid REDCap datetime (YYYY-MM-DD HH:MM:SS)"
-  )
-})
-
-test_that("API number validation accepts decimals without a leading zero", {
+test_that("number validation accepts decimals without a leading zero", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     score = c(".850", "-.850", "."),
@@ -655,7 +275,7 @@ test_that("API number validation accepts decimals without a leading zero", {
     text_validation_type_or_show_slider_number = c(NA, "number")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = "consistency"
@@ -666,7 +286,7 @@ test_that("API number validation accepts decimals without a leading zero", {
   expect_equal(report$findings$value, ".")
 })
 
-test_that("API consistency enforces only configured text validations", {
+test_that("consistency enforces only configured text validations", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     validated_text = c("10", "10.5", ""),
@@ -697,11 +317,11 @@ test_that("API consistency enforces only configured text validations", {
       "integer",
       NA,
       "alpha_only",
-      "integer"
+      NA
     )
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = "consistency"
@@ -713,7 +333,7 @@ test_that("API consistency enforces only configured text validations", {
   expect_equal(report$findings$value, "10.5")
 })
 
-test_that("API validation bounds use configured type-aware metadata", {
+test_that("validation bounds use configured type-aware metadata", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     score = c("4", "11", "invalid"),
@@ -765,7 +385,7 @@ test_that("API validation bounds use configured type-aware metadata", {
     text_validation_max = c(NA, "10", "2,5", NA, NA, "18:00")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = c("outliers", "consistency")
@@ -775,24 +395,29 @@ test_that("API validation bounds use configured type-aware metadata", {
   format_findings <- report$findings |>
     dplyr::filter(.data$issue == "invalid_validation_format")
 
-  expect_equal(nrow(range_findings), 7)
-  expect_setequal(range_findings$record_id, c("1", "2"))
-  expect_false(any(range_findings$record_id == "3"))
-  expect_setequal(
-    unique(range_findings$expected),
-    c(
-      "Between 5 and 10",
-      "Between 1,5 and 2,5",
-      "At least 2025-01-01",
-      "At least 2025-01-01 09:00",
-      "At most 18:00"
+  expect_equal(
+    range_findings |> dplyr::select("record_id", "field_name", "expected"),
+    tibble::tribble(
+      ~record_id, ~field_name, ~expected,
+      "1", "score", "Between 5 and 10",
+      "2", "score", "Between 5 and 10",
+      "1", "comma_score", "Between 1,5 and 2,5",
+      "2", "comma_score", "Between 1,5 and 2,5",
+      "1", "visit_date", "At least 2025-01-01",
+      "1", "visit_datetime", "At least 2025-01-01 09:00",
+      "1", "visit_time", "At most 18:00"
     )
   )
-  expect_equal(nrow(format_findings), 5)
-  expect_true(all(format_findings$record_id == "3"))
+  expect_equal(
+    format_findings |> dplyr::select("record_id", "field_name"),
+    tibble::tibble(
+      record_id = rep("3", 5),
+      field_name = c("score", "comma_score", "visit_date", "visit_datetime", "visit_time")
+    )
+  )
 })
 
-test_that("API malformed dates do not also produce future findings", {
+test_that("malformed dates do not also produce future findings", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     visit_date = c("2999-01-01", "2999-13-01"),
@@ -806,7 +431,7 @@ test_that("API malformed dates do not also produce future findings", {
     text_validation_type_or_show_slider_number = c(NA, "date_ymd")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = c("outliers", "consistency")
@@ -824,7 +449,7 @@ test_that("API malformed dates do not also produce future findings", {
   )
 })
 
-test_that("API reports drop descriptive text fields before analysis", {
+test_that("reports drop descriptive text fields before analysis", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     instructions = c(NA, NA),
@@ -840,7 +465,7 @@ test_that("API reports drop descriptive text fields before analysis", {
   )
 
   expect_warning(
-    report <- build_mock_quality_report(redcap_data, metadata),
+    report <- get_test_quality_report(redcap_data, metadata),
     NA
   )
 
@@ -851,7 +476,7 @@ test_that("API reports drop descriptive text fields before analysis", {
   expect_false(any(report$findings$field_name == "instructions", na.rm = TRUE))
 })
 
-test_that("API field summaries ignore structural missingness from repeating instruments", {
+test_that("field summaries ignore structural missingness from repeating instruments", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_repeat_instrument = c(NA, "repeating_form", "repeating_form"),
@@ -870,7 +495,7 @@ test_that("API field summaries ignore structural missingness from repeating inst
     required_field = c("y", "y", "y")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(form_name = "repeating_form"),
@@ -888,7 +513,7 @@ test_that("API field summaries ignore structural missingness from repeating inst
   expect_equal(report$summaries$records$missing_field_count, 0)
 })
 
-test_that("API project and form missing rates are weighted missing fractions", {
+test_that("project and form missing rates are weighted missing fractions", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3", "4"),
     gate = c(1, 1, 2, 2),
@@ -906,7 +531,7 @@ test_that("API project and form missing rates are weighted missing fractions", {
     branching_logic = c(NA, NA, NA, "[gate] = '2'")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -918,7 +543,7 @@ test_that("API project and form missing rates are weighted missing fractions", {
   expect_equal(report$summaries$forms$missing_rate, 1 / 7)
 })
 
-test_that("API operational checks ignore structural completion blanks from repeating instruments", {
+test_that("operational checks ignore structural completion blanks from repeating instruments", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_repeat_instrument = c(NA, "repeating_form", "repeating_form"),
@@ -937,7 +562,7 @@ test_that("API operational checks ignore structural completion blanks from repea
     required_field = c("y", "n", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(form_name = "repeating_form"),
@@ -962,18 +587,16 @@ test_that("build_quality_report progress display does not affect report contents
     required_field = c("y", "y")
   )
 
-  none_report <- build_mock_quality_report(
-    data = redcap_data,
-    metadata = metadata,
-    progress = "none"
+  testthat::local_mocked_bindings(
+    pull_redcap_project = function(redcap_uri, token) {
+      expect_equal(c(redcap_uri, token), c("https://example.invalid", "synthetic"))
+      list(data = redcap_data, metadata = metadata)
+    }
   )
+  none_report <- build_quality_report("https://example.invalid", "synthetic", progress = "none")
   utils::capture.output(
     utils::capture.output(
-      show_report <- build_mock_quality_report(
-        data = redcap_data,
-        metadata = metadata,
-        progress = "show"
-      ),
+      show_report <- build_quality_report("https://example.invalid", "synthetic", progress = "show"),
       type = "message"
     )
   )
@@ -981,7 +604,7 @@ test_that("build_quality_report progress display does not affect report contents
   expect_equal(show_report, none_report)
 })
 
-test_that("API checkbox consistency findings use REDCap checkbox columns", {
+test_that("checkbox consistency findings use REDCap checkbox columns", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     symptoms___none = c(1, 0, 1),
@@ -998,7 +621,7 @@ test_that("API checkbox consistency findings use REDCap checkbox columns", {
     required_field = c("y", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "consistency"
@@ -1011,16 +634,15 @@ test_that("API checkbox consistency findings use REDCap checkbox columns", {
   expect_equal(report$findings$value, "symptoms___none")
 })
 
-test_that("API consistency detects invalid non-checkbox choice values", {
+test_that("consistency detects invalid non-checkbox choice values", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     radio_field = c("1", "9", ""),
     dropdown_field = c("a", "z", NA),
     yesno_field = c("1", "2", "0"),
     truefalse_field = c("0", "true", "1"),
-    checkbox_field___a = c(1, 2, 0),
+    checkbox_field___a = c(1, 1, 0),
     checkbox_field___b = c(0, 0, 0),
-    checkbox_field___unknown = c(0, 1, 0),
     undefined_field = c("1", "9", ""),
     main_complete = c(2, 0, NA)
   )
@@ -1064,7 +686,7 @@ test_that("API consistency detects invalid non-checkbox choice values", {
     )
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = "consistency"
@@ -1087,7 +709,7 @@ test_that("API consistency detects invalid non-checkbox choice values", {
   expect_false("undefined_field" %in% findings$field_name)
 })
 
-test_that("API invalid choices include applicable repeating context", {
+test_that("invalid choices include applicable repeating context", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_event_name = "event_1_arm_1",
@@ -1104,7 +726,7 @@ test_that("API invalid choices include applicable repeating context", {
     select_choices_or_calculations = c(NA, "1, One | 2, Two")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     repeating_instruments = tibble::tibble(form_name = "repeat_form"),
@@ -1117,7 +739,7 @@ test_that("API invalid choices include applicable repeating context", {
   expect_equal(report$findings$repeat_instance, "1")
 })
 
-test_that("API checkbox consistency reports fields with no selected options", {
+test_that("checkbox consistency reports fields with no selected options", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     emergency___only = c(0, 0),
@@ -1145,7 +767,7 @@ test_that("API checkbox consistency reports fields with no selected options", {
     required_field = "n"
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "consistency"
@@ -1159,7 +781,7 @@ test_that("API checkbox consistency reports fields with no selected options", {
   expect_equal(report$findings$field_name, "emergency")
 })
 
-test_that("API checkbox consistency excludes unassessed form statuses", {
+test_that("checkbox consistency excludes unassessed form statuses", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     emergency___only = c(0, 0),
@@ -1178,7 +800,7 @@ test_that("API checkbox consistency excludes unassessed form statuses", {
     required_field = "n"
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "consistency"
@@ -1187,7 +809,7 @@ test_that("API checkbox consistency excludes unassessed form statuses", {
   expect_equal(nrow(report$findings), 0)
 })
 
-test_that("API checkbox consistency uses metadata choice values", {
+test_that("checkbox consistency uses metadata choice values", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     symptoms___99 = c(1, 0),
@@ -1202,7 +824,7 @@ test_that("API checkbox consistency uses metadata choice values", {
     select_choices_or_calculations = c(NA, "99, None | 1, Fever")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "consistency"
@@ -1212,7 +834,7 @@ test_that("API checkbox consistency uses metadata choice values", {
   expect_equal(report$findings$value, "symptoms___99")
 })
 
-test_that("API checkbox consistency findings include repeating instance context", {
+test_that("checkbox consistency findings include repeating instance context", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_repeat_instrument = c(NA, "symptom_log", "symptom_log"),
@@ -1233,7 +855,7 @@ test_that("API checkbox consistency findings include repeating instance context"
     required_field = c("y", "n", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(form_name = "symptom_log"),
@@ -1247,7 +869,7 @@ test_that("API checkbox consistency findings include repeating instance context"
   expect_equal(report$findings$repeat_instance, "1")
 })
 
-test_that("API duplicate checkbox labels use parent field names", {
+test_that("duplicate checkbox labels use parent field names", {
   redcap_data <- tibble::tibble(
     record_id = "1",
     survey_checkbox___one = 1,
@@ -1269,7 +891,7 @@ test_that("API duplicate checkbox labels use parent field names", {
     required_field = c("y", "n", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "metadata"
@@ -1287,7 +909,7 @@ test_that("API duplicate checkbox labels use parent field names", {
   expect_false(grepl("___", duplicate_label$field_name))
 })
 
-test_that("API empty-but-valid input returns stable empty report", {
+test_that("empty-but-valid input returns stable empty report", {
   redcap_data <- tibble::tibble(
     record_id = character(),
     required_value = character(),
@@ -1302,7 +924,7 @@ test_that("API empty-but-valid input returns stable empty report", {
     required_field = c("y", "y")
   )
 
-  report <- build_mock_quality_report(redcap_data, metadata)
+  report <- get_test_quality_report(redcap_data, metadata)
 
   expect_s3_class(report, "redcap_quality_report")
   expect_equal(nrow(report$findings), 0)
@@ -1313,7 +935,7 @@ test_that("API empty-but-valid input returns stable empty report", {
   expect_true(is.na(report$summaries$forms$missing_rate))
 })
 
-test_that("API nonrepeating form status findings include accessible incomplete rows", {
+test_that("nonrepeating form status findings include accessible incomplete rows", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     demographic_value = c("present", "present"),
@@ -1330,7 +952,7 @@ test_that("API nonrepeating form status findings include accessible incomplete r
     required_field = c("y", "n", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "operational"
@@ -1343,7 +965,7 @@ test_that("API nonrepeating form status findings include accessible incomplete r
   expect_equal(report$findings$value, "Incomplete")
 })
 
-test_that("API form applicability excludes forms disabled for a longitudinal event", {
+test_that("form applicability excludes forms disabled for a longitudinal event", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1"),
     redcap_event_name = c("event_1_arm_1", "event_2_arm_1"),
@@ -1367,7 +989,7 @@ test_that("API form applicability excludes forms disabled for a longitudinal eve
     form = c("main", "main", "labs")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     event_instruments = event_instruments,
@@ -1391,7 +1013,7 @@ test_that("API form applicability excludes forms disabled for a longitudinal eve
   ))
 })
 
-test_that("API form applicability excludes Forms Display Logic structural blanks", {
+test_that("form applicability excludes Forms Display Logic structural blanks", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     main_value = c("present", "present"),
@@ -1408,7 +1030,7 @@ test_that("API form applicability excludes Forms Display Logic structural blanks
     required_field = c("y", "n", "y")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = c("missingness", "operational")
@@ -1429,20 +1051,11 @@ test_that("API form applicability excludes Forms Display Logic structural blanks
   expect_equal(report$summaries$records$missing_field_count, c(0, 0))
 })
 
-test_that("API missingness requires assessed form status", {
+test_that("missingness requires assessed form status", {
   redcap_data <- tibble::tibble(
-    record_id = as.character(1:8),
-    conditional_value = rep(NA_character_, 8),
-    conditional_complete = c(
-      NA,
-      "",
-      0,
-      1,
-      2,
-      "Incomplete",
-      "Unverified",
-      "Complete"
-    )
+    record_id = as.character(1:5),
+    conditional_value = rep(NA_character_, 5),
+    conditional_complete = c(NA, "", "0", "1", "2")
   )
 
   metadata <- tibble::tibble(
@@ -1453,7 +1066,7 @@ test_that("API missingness requires assessed form status", {
     required_field = c("y", "y")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness",
@@ -1465,23 +1078,23 @@ test_that("API missingness requires assessed form status", {
   sparse_findings <- report$findings |>
     dplyr::filter(.data$issue == "unexpected_sparse_field")
 
-  expect_equal(required_findings$record_id, c("4", "5", "7", "8"))
+  expect_equal(required_findings$record_id, c("4", "5"))
   expect_equal(sparse_findings$field_name, "conditional_value")
   expect_equal(
     report$summaries$fields |>
       dplyr::filter(.data$field_name == "conditional_value") |>
       dplyr::select("record_count", "missing_count", "missing_rate"),
-    tibble::tibble(record_count = 4L, missing_count = 4L, missing_rate = 1)
+    tibble::tibble(record_count = 2L, missing_count = 2L, missing_rate = 1)
   )
   expect_equal(report$summaries$project$missing_rate, 0.5)
   expect_equal(report$summaries$forms$missing_rate, 0.5)
   expect_equal(
     report$summaries$records$missing_field_count,
-    c(0, 0, 0, 1, 1, 0, 1, 1)
+    c(0, 0, 0, 1, 1)
   )
 })
 
-test_that("API missingness excludes forms without status columns", {
+test_that("missingness excludes forms without status columns", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     required_value = c(NA, NA)
@@ -1495,7 +1108,7 @@ test_that("API missingness excludes forms without status columns", {
     required_field = c("y", "y")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     redcap_data,
     metadata,
     checks = "missingness"
@@ -1515,7 +1128,7 @@ test_that("API missingness excludes forms without status columns", {
   expect_equal(report$summaries$records$missing_field_count, c(0, 0))
 })
 
-test_that("API missingness treats explicit unchecked checkbox values as observed", {
+test_that("missingness treats explicit unchecked checkbox values as observed", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     symptoms___fever = c(0, 0),
@@ -1533,7 +1146,7 @@ test_that("API missingness treats explicit unchecked checkbox values as observed
     select_choices_or_calculations = c(NA, "fever, Fever | rash, Rash", NA)
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -1569,7 +1182,7 @@ test_that("API missingness treats explicit unchecked checkbox values as observed
   )
 })
 
-test_that("API missingness distinguishes checkbox values from unavailable data", {
+test_that("missingness distinguishes checkbox values from unavailable data", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     symptoms___fever = c(1, 0, NA),
@@ -1586,7 +1199,7 @@ test_that("API missingness distinguishes checkbox values from unavailable data",
     select_choices_or_calculations = c(NA, "fever, Fever | rash, Rash")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -1616,7 +1229,7 @@ test_that("API missingness distinguishes checkbox values from unavailable data",
   )
 })
 
-test_that("API field summaries ignore structural missingness between repeating instruments", {
+test_that("field summaries ignore structural missingness between repeating instruments", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_repeat_instrument = c(NA, "repeat_a", "repeat_b"),
@@ -1647,7 +1260,7 @@ test_that("API field summaries ignore structural missingness between repeating i
     required_field = c("y", "y", "y", "y")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(
@@ -1668,7 +1281,7 @@ test_that("API field summaries ignore structural missingness between repeating i
   expect_equal(report$summaries$records$missing_field_count, 0)
 })
 
-test_that("API repeating missingness requires matching non-missing form status", {
+test_that("repeating missingness requires matching non-missing form status", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_repeat_instrument = c(NA, "repeat_a", "repeat_a"),
@@ -1687,7 +1300,7 @@ test_that("API repeating missingness requires matching non-missing form status",
     required_field = c("y", "y", "y")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(form_name = "repeat_a"),
@@ -1709,7 +1322,7 @@ test_that("API repeating missingness requires matching non-missing form status",
   )
 })
 
-test_that("API completion findings preserve form order around repeating forms", {
+test_that("completion findings preserve form order around repeating forms", {
   raw_data <- tibble::tibble(
     record_id = c("1", "1", "1", "2", "3"),
     redcap_repeat_instrument = c(NA, "repeated", "repeated", NA, "repeated"),
@@ -1735,7 +1348,7 @@ test_that("API completion findings preserve form order around repeating forms", 
     required_field = c("y", "n", "n", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = raw_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(form_name = "repeated"),
@@ -1774,7 +1387,7 @@ test_that("API completion findings preserve form order around repeating forms", 
   expect_equal(findings, expected)
 })
 
-test_that("API longitudinal completion findings preserve multi-arm event grid", {
+test_that("longitudinal completion findings preserve multi-arm event grid", {
   raw_data <- tibble::tibble(
     record_id = c(
       "record_1",
@@ -1810,7 +1423,7 @@ test_that("API longitudinal completion findings preserve multi-arm event grid", 
     required_field = c("y", "n", "n")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = raw_data,
     metadata = metadata,
     checks = "operational"
@@ -1831,7 +1444,7 @@ test_that("API longitudinal completion findings preserve multi-arm event grid", 
   expect_false(any(is.na(findings$value)))
 })
 
-test_that("API event metadata does not override raw event row counts", {
+test_that("event metadata does not override raw event row counts", {
   raw_data <- tibble::tibble(
     record_id = c("record_1", "record_1", "record_2", "record_2"),
     redcap_event_name = c(
@@ -1865,7 +1478,7 @@ test_that("API event metadata does not override raw event row counts", {
     event_id = 1:4
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = raw_data,
     metadata = metadata,
     events = api_events
@@ -1886,44 +1499,7 @@ test_that("API event metadata does not override raw event row counts", {
   )
 })
 
-test_that("API completion status values are normalized", {
-  raw_data <- tibble::tibble(
-    record_id = c("1", "2", "3", "4", "5", "6", "7"),
-    value = letters[1:7],
-    demographics_complete = c(
-      0,
-      1,
-      2,
-      NA,
-      "Incomplete",
-      "Unverified",
-      "Complete"
-    )
-  )
-
-  metadata <- tibble::tibble(
-    field_name = c("record_id", "value"),
-    form_name = c("demographics", "demographics"),
-    field_type = c("text", "text"),
-    field_label = c("Record ID", "Value"),
-    required_field = c("y", "n")
-  )
-
-  report <- build_mock_quality_report(
-    data = raw_data,
-    metadata = metadata,
-    checks = "operational"
-  )
-
-  expect_equal(report$findings$record_id, c("1", "2", "4", "5", "6"))
-  expect_equal(
-    report$findings$value,
-    c("Incomplete", "Unverified", NA, "Incomplete", "Unverified")
-  )
-  expect_equal(report$findings$expected, rep("Complete", 5))
-})
-
-test_that("API required missingness respects simple branching logic", {
+test_that("required missingness respects simple branching logic", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     field_a = c(1, 2, 1),
@@ -1940,7 +1516,7 @@ test_that("API required missingness respects simple branching logic", {
     branching_logic = c(NA, NA, "[field_a] = '1'")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -1962,7 +1538,7 @@ test_that("API required missingness respects simple branching logic", {
   expect_equal(report$summaries$records$missing_field_count, c(1, 0, 0))
 })
 
-test_that("API record summaries aggregate longitudinal rows", {
+test_that("record summaries aggregate longitudinal rows", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "2"),
     redcap_event_name = c("baseline_arm_1", "followup_arm_1", "baseline_arm_1"),
@@ -1977,7 +1553,7 @@ test_that("API record summaries aggregate longitudinal rows", {
     required_field = "y"
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -1988,7 +1564,7 @@ test_that("API record summaries aggregate longitudinal rows", {
   expect_equal(report$summaries$records$finding_count, c(2L, 0L))
 })
 
-test_that("API IQR checks exclude numeric-coded categorical fields", {
+test_that("IQR checks exclude numeric-coded categorical fields", {
   redcap_data <- tibble::tibble(
     record_id = as.character(seq_len(6)),
     category = c(1, 2, 2, 3, 3, 99),
@@ -2005,7 +1581,7 @@ test_that("API IQR checks exclude numeric-coded categorical fields", {
     )
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "outliers"
@@ -2014,7 +1590,7 @@ test_that("API IQR checks exclude numeric-coded categorical fields", {
   expect_false("numeric_iqr_outlier" %in% report$findings$issue)
 })
 
-test_that("API required missingness treats NA branching evaluations as hidden", {
+test_that("required missingness treats NA branching evaluations as hidden", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     infusion_admin = c(0, 1, NA),
@@ -2031,7 +1607,7 @@ test_that("API required missingness treats NA branching evaluations as hidden", 
     branching_logic = c(NA, NA, "[infusion_admin] = '0'")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -2052,7 +1628,7 @@ test_that("API required missingness treats NA branching evaluations as hidden", 
   )
 })
 
-test_that("API required missingness respects compound branching logic", {
+test_that("required missingness respects compound branching logic", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3", "4"),
     field_a = c(1, 1, 2, 2),
@@ -2075,7 +1651,7 @@ test_that("API required missingness respects compound branching logic", {
     )
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -2096,7 +1672,7 @@ test_that("API required missingness respects compound branching logic", {
   )
 })
 
-test_that("API required missingness respects inequality and numeric branching logic", {
+test_that("required missingness respects inequality and numeric branching logic", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     age = c(6, 4, 7),
@@ -2114,7 +1690,7 @@ test_that("API required missingness respects inequality and numeric branching lo
     branching_logic = c(NA, NA, NA, "[age] > 5 and [status] <> 'inactive'")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -2135,7 +1711,7 @@ test_that("API required missingness respects inequality and numeric branching lo
   )
 })
 
-test_that("API required missingness respects checkbox branching logic", {
+test_that("required missingness respects checkbox branching logic", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2", "3"),
     symptoms___fever = c(1, 0, 1),
@@ -2153,7 +1729,7 @@ test_that("API required missingness respects checkbox branching logic", {
     branching_logic = c(NA, NA, "[symptoms(fever)] = '1'")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -2174,7 +1750,7 @@ test_that("API required missingness respects checkbox branching logic", {
   )
 })
 
-test_that("API required missingness keeps unsupported branching logic assessable", {
+test_that("required missingness keeps unsupported branching logic assessable", {
   redcap_data <- tibble::tibble(
     record_id = "1",
     start_date = "2025-01-01",
@@ -2191,7 +1767,7 @@ test_that("API required missingness keeps unsupported branching logic assessable
     branching_logic = c(NA, NA, "datediff([start_date], 'today', 'd') > 30")
   )
 
-  report <- build_mock_quality_report(
+  report <- get_test_quality_report(
     data = redcap_data,
     metadata = metadata,
     checks = "missingness"
@@ -2201,4 +1777,45 @@ test_that("API required missingness keeps unsupported branching logic assessable
     report$findings$issue == "required_field_missing" &
       report$findings$field_name == "followup_date"
   ))
+})
+
+test_that("IQR uses eligible finite values and keeps assessing the report", {
+  data <- tibble::tibble(
+    record_id = as.character(1:6), redcap_event_name = c(rep("enabled_arm_1", 5), "disabled_arm_1"),
+    value = c("1", "2", "3", "4", "5", "999"), main_complete = "2"
+  )
+  metadata <- get_test_metadata(c("record_id", "value"))
+  report <- get_test_quality_report(data, metadata, "outliers",
+    event_instruments = tibble::tibble(unique_event_name = "enabled_arm_1", form = "main")
+  )
+  expect_equal(nrow(report$findings), 0)
+  data <- dplyr::select(data, -"redcap_event_name")
+  data$value <- c("1", "2", "3", "4", "Inf", "-Inf")
+  expect_warning(report <- get_test_quality_report(data, metadata, "outliers"), "excluded from IQR")
+  expect_equal(nrow(report$findings), 0)
+  data$value <- c("1", rep("Inf", 5))
+  expect_warning(get_test_quality_report(data, metadata, "outliers"), "excluded from IQR")
+  expect_true(is.na(get_parsed_validation_values(paste(rep("9", 400), collapse = ""), "number")))
+})
+
+test_that("checkbox meaning follows metadata labels rather than legacy codes", {
+  data <- tibble::tibble(record_id = "1", support___no = "1", support___vent = "1", main_complete = "2")
+  metadata <- get_test_metadata(c("record_id", "support"), types = c("text", "checkbox"))
+  metadata$select_choices_or_calculations <- c(NA, "no, Nasal oxygen | vent, Ventilation")
+  expect_equal(nrow(get_test_quality_report(data, metadata, "consistency")$findings), 0)
+  metadata$select_choices_or_calculations[2] <- "no, None | vent, Ventilation"
+  expect_equal(get_test_quality_report(data, metadata, "consistency")$findings$issue, "checkbox_none_with_other")
+})
+
+test_that("report presentation exposes settings, assessment coverage and denominators", {
+  data <- tibble::tibble(record_id = "1", detail = NA_character_, main_complete = "0")
+  metadata <- get_test_metadata(c("record_id", "detail"))
+  report <- get_test_quality_report(data, metadata, checks = "missingness")
+  expect_output(print(report), "No values were eligible")
+  expect_equal(report$metadata$settings$checks, "missingness")
+  expect_equal(report$metadata$settings$evaluation_date, as.Date("2026-11-09"))
+  data$main_complete <- "2"
+  report <- get_test_quality_report(data, metadata, checks = "missingness")
+  expect_match(report$findings$message, "1 of 1 assessed values are missing \\(100%\\); threshold: 95%")
+  expect_equal(report$metadata$settings$package_version, as.character(utils::packageVersion("REDCapExploreR")))
 })

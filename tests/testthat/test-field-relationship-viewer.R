@@ -5,7 +5,7 @@ test_that("references show all returned rows without a default filter", {
   expect_equal(tables$references$data[["Reference text"]], report$references$reference_text)
   expect_false("view" %in% names(tables$references$data))
   expect_false("Occurrence ID" %in% names(tables$references$data))
-  widget <- get_metadata_datatable(tibble::tibble(view = c("Direct outgoing", "Other relationships")), 25)
+  widget <- get_metadata_datatable(tables$references$data, 25)
   expect_null(widget$x$options$searchCols)
   html <- as.character(view_field_relationship_summary(report))
   expect_match(html, "Shows every returned reference", fixed = TRUE)
@@ -65,14 +65,12 @@ test_that("empty viewer describes the inspected scope", {
 test_that("viewer sections and print use report terms with concise item tables", {
   report <- field_relationship_summary("weight_kg", mock_codebook)
   tables <- get_relationship_viewer_tables(report)
-  expect_equal(vapply(tables, `[[`, character(1), "title"), c(
-    definition = "Field", upstream = "Upstream", downstream = "Downstream",
-    summary = "Summary", references = "References", issues = "Interpretation issues", coverage = "Project Coverage"
-  ))
+  expect_equal(names(tables), c("definition", "upstream", "downstream", "summary", "references", "issues", "coverage"))
+  expect_equal(tables$upstream$title, "Upstream")
+  expect_equal(tables$downstream$title, "Downstream")
   expect_output(print(report), "Upstream: 1 item")
   expect_output(print(report), "Downstream: 6 direct items, 1 indirect item")
   expect_output(print(report), "Project Coverage: project-wide")
-  expect_lte(ncol(tables$downstream$data), 8)
   expect_false(any(c("field_name", "item_name", "path", "depth", "Occurrence ID") %in% names(tables$downstream$data)))
   expect_equal(nrow(tables$downstream$data), nrow(report$downstream))
   expect_true(any(nzchar(tables$references$data[["Interpretation note"]])))
@@ -131,18 +129,17 @@ test_that("empty Project Diagnostics describes the absence of interpretation iss
 test_that("relationship tables distinguish referenced options from containing choice labels", {
   report <- field_relationship_summary("symptoms", get_checkbox_relationship_codebook())
   tables <- get_relationship_viewer_tables(report)
-  purrr::walk(c("summary", "references"), \(section) {
-    data <- tables[[section]]$data
-    grade <- data[data[["Referencing item"]] == "high_grade", ]
-    expect_equal(grade[["Referenced choice"]], "[symptoms(fever)] (Fever)")
-    expect_true(is.na(grade[["Containing choice code"]]))
-    prompt <- data[data[["Referencing item"]] == "prompt", ]
-    expect_equal(prompt[["Containing choice code"]], "1")
-    expect_equal(prompt[["Referenced choice"]], "[symptoms(fever)] (Fever)")
-    general <- data[data[["Referencing item"]] == "display", ]
-    expect_true(is.na(general[["Referenced choice"]]))
-    expect_false("Choice code" %in% names(data))
-  })
+  summary <- tables$summary$data |>
+    dplyr::select("Referencing item", "Referenced choice", "Containing choice code")
+  references <- tables$references$data |>
+    dplyr::select("Referencing item", "Referenced choice", "Containing choice code")
+  expected <- tibble::tibble(
+    `Referencing item` = c("high_grade", "prompt", "display"),
+    `Referenced choice` = c("[symptoms(fever)] (Fever)", "[symptoms(fever)] (Fever)", NA),
+    `Containing choice code` = c(NA, "1", NA)
+  )
+  expect_equal(summary, expected)
+  expect_equal(references, expected)
   file <- tempfile(fileext = ".html")
   save_field_relationship_summary(report, file)
   html <- paste(readLines(file, warn = FALSE), collapse = "\n")

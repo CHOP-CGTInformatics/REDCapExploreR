@@ -11,24 +11,58 @@ test_that("display sources discover quoted piping and embedding", {
   expect_equal(tokens$reference_text, c("[weight_kg:value]", "{review_notes}"))
 })
 
-test_that("annotation arguments distinguish defaults, calculations and ambiguity", {
+test_that("DEFAULT piping is an initial value relationship", {
   source <- get_relationship_sources(get_weight_codebook()) |>
     dplyr::filter(.data$dependent_name == "starting_weight", .data$metadata_column == "field_annotation")
-  cases <- tibble::tribble(
-    ~expression, ~relationship, ~interpretation,
-    "@DEFAULT='[weight_kg]'", "initial_value", "recognized",
-    "@CALCTEXT([weight_kg] * 2)", "calculation_input", "recognized",
-    "@CALCDATE([weight_kg], 1, 'd')", "calculation_input", "recognized",
-    "@CALCTEXT('[weight_kg]')", "calculation_input", "unclassified",
-    "@UNKNOWN([weight_kg])", "unclassified", "unclassified",
-    "@DEFAULT('[weight_kg]'", "initial_value", "unclassified"
-  )
-  purrr::walk(seq_len(nrow(cases)), \(i) {
-    source$expression <- cases$expression[[i]]
-    references <- get_relationship_source_references(source)
-    expect_equal(references$relationship, cases$relationship[[i]], info = source$expression)
-    expect_equal(references$interpretation, cases$interpretation[[i]], info = source$expression)
-  })
+  source$expression <- "@DEFAULT='[weight_kg]'"
+  references <- get_relationship_source_references(source)
+  expect_equal(references$relationship, "initial_value")
+  expect_equal(references$interpretation, "recognized")
+})
+
+test_that("CALCTEXT expressions identify calculation inputs", {
+  source <- get_relationship_sources(get_weight_codebook()) |>
+    dplyr::filter(.data$dependent_name == "starting_weight", .data$metadata_column == "field_annotation")
+  source$expression <- "@CALCTEXT([weight_kg] * 2)"
+  references <- get_relationship_source_references(source)
+  expect_equal(references$relationship, "calculation_input")
+  expect_equal(references$interpretation, "recognized")
+})
+
+test_that("CALCDATE expressions identify calculation inputs", {
+  source <- get_relationship_sources(get_weight_codebook()) |>
+    dplyr::filter(.data$dependent_name == "starting_weight", .data$metadata_column == "field_annotation")
+  source$expression <- "@CALCDATE([weight_kg], 1, 'd')"
+  references <- get_relationship_source_references(source)
+  expect_equal(references$relationship, "calculation_input")
+  expect_equal(references$interpretation, "recognized")
+})
+
+test_that("quoted CALCTEXT references retain uncertain interpretation", {
+  source <- get_relationship_sources(get_weight_codebook()) |>
+    dplyr::filter(.data$dependent_name == "starting_weight", .data$metadata_column == "field_annotation")
+  source$expression <- "@CALCTEXT('[weight_kg]')"
+  references <- get_relationship_source_references(source)
+  expect_equal(references$relationship, "calculation_input")
+  expect_equal(references$interpretation, "unclassified")
+})
+
+test_that("unknown annotation tags retain evidence without assigning behavior", {
+  source <- get_relationship_sources(get_weight_codebook()) |>
+    dplyr::filter(.data$dependent_name == "starting_weight", .data$metadata_column == "field_annotation")
+  source$expression <- "@UNKNOWN([weight_kg])"
+  references <- get_relationship_source_references(source)
+  expect_equal(references$relationship, "unclassified")
+  expect_equal(references$interpretation, "unclassified")
+})
+
+test_that("incomplete DEFAULT arguments retain an interpretation warning", {
+  source <- get_relationship_sources(get_weight_codebook()) |>
+    dplyr::filter(.data$dependent_name == "starting_weight", .data$metadata_column == "field_annotation")
+  source$expression <- "@DEFAULT('[weight_kg]'"
+  references <- get_relationship_source_references(source)
+  expect_equal(references$relationship, "initial_value")
+  expect_equal(references$interpretation, "unclassified")
 })
 
 test_that("nested IF annotations retain condition and branch relationships", {
@@ -49,8 +83,9 @@ test_that("qualifiers resolve field identity independently of context", {
     "[unknown_arm_1][weight_kg]", "[symptoms(1)]", "[symptoms(9)]", "[weight_kg:unknown]",
     sep = " + "
   )
-  raw <- get_relationship_source_references(source)
-  references <- dplyr::bind_rows(purrr::map(seq_len(nrow(raw)), \(i) get_resolved_relationship(raw[i, ], book)))
+  book$definitions$fields$select_choices_or_calculations[book$definitions$fields$field_name == "bmi"] <- source$expression
+  references <- field_relationship_summary("bmi", book)$references |>
+    dplyr::filter(.data$dependent_name == "bmi")
   expect_equal(references$source_field, c(rep("weight_kg", 3), rep("symptoms", 2), "weight_kg"))
   expect_equal(references$resolution, c("resolved", "context_dependent", "unresolved", "resolved", "unresolved", "unresolved"))
   expect_equal(references$event[1:2], c("baseline_arm_1", "previous-event-name"))
