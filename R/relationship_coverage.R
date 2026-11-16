@@ -115,8 +115,9 @@ get_relationship_coverage <- function(diagnostics, report) {
       scope = "project_notes", metadata_column = NA_character_, status = "interpretation_limits",
       location_count = n_distinct(other$source_id), reference_count = sum(other$row_kind == "reference"),
       note = paste(
-        "Interpretation notes exist elsewhere in the project and may conceal additional connections.",
-        "Use include_diagnostics = TRUE for details."
+        "Some other project metadata could not be fully interpreted.",
+        "Additional references to this field may therefore be missing from this report.",
+        "Request diagnostics to inspect those locations."
       ), examples = ""
     )
   }

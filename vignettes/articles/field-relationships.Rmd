@@ -34,6 +34,11 @@ relationships <- field_relationship_summary("weight_kg", codebook)
 Codebooks built before complete definitions were added must be rebuilt. Existing
 codebook viewing and saving still work with older objects.
 
+Build or reuse a codebook, choose a field, then inspect the report or open its
+viewer:
+
+![A codebook supplies project definitions; selecting a field produces a report of relationships, interpretation issues, and inspection scope.](figures/field-relationship-workflow.svg)
+
 ## Explore the bundled example
 
 `mock_codebook` extends the mock project's metadata with weight/BMI examples.
@@ -58,8 +63,11 @@ relationships$downstream |>
 | `custom_record_label` | Project setting that pipes weight. |
 | `diagnostic_example` | Clearly marked diagnostic example: contains ordinary piping, a deliberately unsupported action tag, and a reference to missing `retired_weight`. |
 
-Use exact dictionary field names, including a checkbox's parent name. Labels
-and exported checkbox columns such as `symptoms___fever` are not field names.
+Use exact dictionary field names rather than field labels. For a checkbox,
+supply its parent dictionary field name, such as `symptoms`. Individual exported
+checkbox columns, such as `symptoms___fever`, are not accepted. The report includes
+references to the checkbox as a whole and to its individual choices; it does not
+produce a separate relationship report for one choice.
 
 ## Read upstream and downstream correctly
 
@@ -80,9 +88,9 @@ an answer. Likewise, a default initializes a field; it does not establish ongoin
 synchronization with its source.
 
 Traversal operates at field level. It does not establish a continuous runtime
-path through particular events, arms, or repeating instances. One deterministic
-shortest chain is shown per item; alternative reference occurrences remain in
-`references`. Cycles terminate without repeatedly listing the same item.
+path through particular events, arms, or repeating instances. Each related item
+appears once, with one shortest reference chain; other reference occurrences remain
+in `references`.
 These connections are metadata references, not foreign keys, joins, cardinalities,
 or guarantees of referential integrity.
 
@@ -109,11 +117,8 @@ or distinct expressions remain separate Summary rows. Field labels and notes
 are separate configuration to inspect, even when both pipe the same value.
 
 The viewer uses REDCap terms such as Branching logic, Piping, Field embedding,
-and Default value (`@DEFAULT`). It keeps item inventories short. Complete related
-field definitions, qualifiers, character offsets, and report-local occurrence IDs
-remain available in the R output. `path` contains occurrence IDs and `field_path`
-contains item names; `reference_chain` gives a readable, typed chain. These IDs
-are local to a report, not permanent identifiers for audit comparisons.
+and Default value (`@DEFAULT`). The R output retains complete definitions and
+reference evidence when you need more detail than the viewer displays.
 
 ```{r viewer, eval=FALSE}
 view_field_relationship_summary(relationships)
@@ -144,10 +149,6 @@ Unknown fields and unsupported annotation candidates do not create traversable
 links. They are retained as evidence and interpretation issues. `status_note`
 contains the specific reason and is empty when no interpretation limit was found.
 That empty note does not certify a valid REDCap expression.
-
-`traversal_role` is independent of interpretation: `upstream`, `downstream`,
-`both` for references within both traversed regions of a cycle, or `self` for a
-self-reference. `both` does not assert a direct reciprocal pair.
 
 Related issues are always available without project-wide diagnostics:
 
@@ -185,6 +186,14 @@ field. Source rows group available locations, nonblank expressions, and referenc
 occurrences by metadata source. Other-project interpretation limits are disclosed
 in aggregate. Source counts overlap with interpretation-limit counts and must
 not be added together as an issue total. Related issue details live in `issues`.
+
+The aggregate notice for interpretation limits elsewhere reads:
+
+> Some other project metadata could not be fully interpreted. Additional references
+> to this field may therefore be missing from this report. Request diagnostics to
+> inspect those locations.
+
+This is a completeness caveat, not confirmation of an additional relationship.
 
 Supported sources include branching logic, calculated fields, field annotations,
 field labels and notes, section headers, choice labels, and the custom record

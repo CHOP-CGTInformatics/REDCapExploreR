@@ -1,5 +1,10 @@
 # REDCapExploreR 0.1.0
 
+* Handle REDCap's explicit non-applicable event, form/event mapping, and arm
+  responses for classic projects, and the response for projects without repeats.
+  Codebooks, record-status data, and quality reports retain genuine API errors
+  while supporting classic projects with or without repeating instruments.
+
 * Separate field-name matching from qualifier interpretation; known references
   remain linked when qualifiers need review. Support combined checkbox piping
   modifiers and flag cross-instrument embedding without hiding its reference.

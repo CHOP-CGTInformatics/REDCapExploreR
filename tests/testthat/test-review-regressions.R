@@ -15,7 +15,11 @@ test_that("API envelopes distinguish failures from classic nonapplicability", {
     data = tibble::tibble(), success = FALSE, status_code = 403L,
     raw_text = "Permission denied"
   )
-  purrr::walk(c("records", "metadata", "event metadata", "repeating-instrument metadata"), \(label) {
+  labels <- c(
+    "records", "metadata", "event metadata", "event-instrument metadata",
+    "arm metadata", "repeating-instrument metadata"
+  )
+  purrr::walk(labels, \(label) {
     expect_error(get_redcapr_data(failed, label), "unsuccessful")
   })
   failed$raw_text <- "ERROR: You cannot export events for classic projects"
@@ -24,6 +28,86 @@ test_that("API envelopes distinguish failures from classic nonapplicability", {
   expect_equal(get_redcapr_data(list(data = tibble::tibble(), success = TRUE), "records"), tibble::tibble())
   expect_equal(get_redcapr_data(tibble::tibble(x = 1), "records"), tibble::tibble(x = 1))
   expect_error(get_redcapr_data(list(data = NULL, success = TRUE), "records"), "data frame")
+})
+
+test_that("non-applicable API responses are accepted only for the matching endpoint", {
+  responses <- c(
+    "event metadata" = "ERROR: You cannot export events for classic projects",
+    "event-instrument metadata" = "ERROR: You cannot export form/event mappings for classic projects",
+    "arm metadata" = "ERROR: You cannot export arms for classic projects",
+    "repeating-instrument metadata" = paste(
+      "ERROR: You cannot export repeating instruments and events because",
+      "the project does not contain any repeating instruments and events"
+    )
+  )
+  purrr::walk(names(responses), \(label) {
+    result <- list(data = tibble::tibble(), success = FALSE, status_code = 400L, raw_text = responses[[label]])
+    expect_equal(get_redcapr_data(result, label), tibble::tibble())
+    expect_error(get_redcapr_data(result, "metadata"), "unsuccessful")
+    expect_error(get_redcapr_data(result, "records"), "unsuccessful")
+    result$raw_text <- paste(responses[[label]], "Permission denied")
+    expect_error(get_redcapr_data(result, label), "unsuccessful")
+  })
+})
+
+test_that("classic projects build dashboards and codebooks with or without repeating instruments", {
+  failed <- function(text) list(data = tibble::tibble(), success = FALSE, status_code = 400L, raw_text = text)
+  for (repeats in c(FALSE, TRUE)) {
+    testthat::local_mocked_bindings(
+      redcap_read_oneshot = function(...) {
+        list(
+          data = if (repeats) {
+            tibble::tibble(
+              record_id = rep("1", 3), value = c(NA, "a", "b"), main_complete = c(NA, "0", "2"),
+              demographics_complete = c("2", NA, NA),
+              redcap_repeat_instrument = c(NA, "main", "main"), redcap_repeat_instance = c(NA, "1", "2")
+            )
+          } else {
+            tibble::tibble(record_id = "1", value = "a", demographics_complete = "2", main_complete = "2")
+          }, success = TRUE
+        )
+      },
+      redcap_metadata_read = function(...) {
+        list(
+          data = get_review_metadata(c("record_id", "value"), c("demographics", "main")), success = TRUE
+        )
+      },
+      redcap_event_read = function(...) failed("ERROR: You cannot export events for classic projects"),
+      redcap_event_instruments = function(...) failed("ERROR: You cannot export form/event mappings for classic projects"),
+      redcap_arm_export = function(...) failed("ERROR: You cannot export arms for classic projects"),
+      redcap_instruments = function(...) {
+        list(
+          data = tibble::tibble(instrument_name = c("demographics", "main"), instrument_label = c("Demographics", "Main")), success = TRUE
+        )
+      },
+      redcap_instrument_repeating = function(...) {
+        if (repeats) {
+          list(data = tibble::tibble(form_name = "main", custom_form_label = "[value]"), success = TRUE)
+        } else {
+          failed(paste(
+            "ERROR: You cannot export repeating instruments and events because",
+            "the project does not contain any repeating instruments and events"
+          ))
+        }
+      },
+      redcap_project_info_read = function(...) {
+        list(
+          data = tibble::tibble(is_longitudinal = FALSE, has_repeating_instruments_or_events = repeats), success = TRUE
+        )
+      }
+    )
+    tiles <- build_record_status_data("https://example.invalid", "synthetic")
+    expect_named(tiles, c("record_id", "form_name", "pct_complete"))
+    expect_equal(nrow(tiles), 2L)
+    expect_equal(tiles$pct_complete[tiles$form_name == "Main"], if (repeats) 0.5 else 1)
+    book <- build_codebook("https://example.invalid", "synthetic")
+    expect_s3_class(book, "redcap_codebook")
+    expect_equal(nrow(book$events), 0L)
+    expect_equal(nrow(book$event_instruments), 0L)
+    expect_equal(nrow(book$repeating), if (repeats) 1L else 0L)
+    report <- build_quality_report("https://example.invalid", "synthetic", checks = "missingness", progress = "none")
+    expect_s3_class(report, "redcap_quality_report")
+  }
 })
 
 test_that("public workflows reject unsuccessful structural API envelopes", {
