@@ -24,6 +24,29 @@ test_that("viewer labels relationship types and hides routine interpretation sta
   expect_true(all(report$summary$resolution == "resolved"))
 })
 
+test_that("viewer explains blank interpretation notes and their scope in each table", {
+  report <- field_relationship_summary("weight_kg", mock_codebook, include_diagnostics = TRUE)
+  tables <- get_relationship_viewer_tables(report)
+  html <- as.character(view_field_relationship_summary(report))
+  expect_match(html, "A blank note means no interpretation limit was detected", fixed = TRUE)
+  expect_match(html, "it does not validate the REDCap configuration", fixed = TRUE)
+  expect_match(tables$references$description, "Notes apply to each occurrence.", fixed = TRUE)
+  expect_match(tables$summary$description, "Notes apply to each grouped reference.", fixed = TRUE)
+  expect_match(tables$upstream$description,
+    "Notes combine limits along the displayed shortest reference chain, not every alternative path.",
+    fixed = TRUE
+  )
+  expect_match(tables$downstream$description,
+    "Notes combine limits along the displayed shortest reference chain, not every alternative path.",
+    fixed = TRUE
+  )
+  expect_match(tables$issues$description, "metadata locations involving the selected field or related items", fixed = TRUE)
+  expect_match(
+    tables$diagnostics$description,
+    "metadata locations across the entire project, independent of the selected field", fixed = TRUE
+  )
+})
+
 test_that("Project Diagnostics appear only when explicitly requested", {
   book <- get_weight_codebook()
   ordinary <- field_relationship_summary("weight_kg", book)

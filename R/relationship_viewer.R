@@ -24,7 +24,11 @@ view_field_relationship_summary <- function(relationships, page_length = 25) {
       tags$header(
         class = "redcap-codebook-header",
         tags$h1(paste("Field relationships:", relationships$field$field_name)),
-        tags$p("Explore upstream references and downstream uses. Matched references do not validate REDCap configuration."),
+        tags$p("Explore upstream references and downstream uses."),
+        tags$p(paste(
+          "Interpretation notes explain references that need human review.",
+          "A blank note means no interpretation limit was detected; it does not validate the REDCap configuration."
+        )),
         if (nrow(relationships$references) == 0) {
           tags$p(paste(
             "No references to", relationships$field$field_name, "were found in the inspected metadata."
@@ -74,22 +78,31 @@ get_relationship_viewer_tables <- function(relationships) {
     ),
     upstream = list(
       title = "Upstream", data = get_relationship_viewer_items(relationships$upstream),
-      description = "Fields referenced by this field, directly or through other references. Arrows point toward the referencing item."
+      description = paste(
+        "Fields referenced by this field, directly or through other references. Arrows point toward the referencing item.",
+        "Notes combine limits along the displayed shortest reference chain, not every alternative path."
+      )
     ),
     downstream = list(
       title = "Downstream", data = get_relationship_viewer_items(relationships$downstream),
-      description = "Fields and project settings that reference this field, directly or through other references."
+      description = paste(
+        "Fields and project settings that reference this field, directly or through other references.",
+        "Notes combine limits along the displayed shortest reference chain, not every alternative path."
+      )
     ),
     summary = list(
       title = "Summary", data = get_relationship_viewer_evidence(relationships$summary, summary = TRUE),
       description = paste(
         "One explanation per item, metadata location, expression, and reference interpretation.",
-        "Checkbox options retain raw codes and labels."
+        "Checkbox options retain raw codes and labels. Notes apply to each grouped reference."
       )
     ),
     references = list(
       title = "References", data = get_relationship_viewer_evidence(relationships$references),
-      description = "Shows every returned reference occurrence with its original text. Filters apply only when you choose them."
+      description = paste(
+        "Shows every returned reference occurrence with its original text. Filters apply only when you choose them.",
+        "Notes apply to each occurrence."
+      )
     )
   )
   if (nrow(relationships$issues) > 0) {
@@ -97,7 +110,8 @@ get_relationship_viewer_tables <- function(relationships) {
       title = "Interpretation issues",
       data = get_relationship_viewer_issues(relationships$issues),
       description = paste(
-        "Issues involving the selected field or related items, including references outside the displayed chains.",
+        "Notes explain issues at metadata locations involving the selected field or related items,",
+        "including references outside the displayed chains.",
         "These are interpretation limits, not a count of invalid REDCap settings."
       )
     )
@@ -134,7 +148,7 @@ get_relationship_viewer_tables <- function(relationships) {
       description = if (nrow(relationships$diagnostics) == 0) {
         "No project-wide interpretation issues were found in the inspected metadata."
       } else {
-        "Interpretation issues across the entire project, independent of the selected field."
+        "Notes explain issues at metadata locations across the entire project, independent of the selected field."
       }
     )
   }

@@ -181,9 +181,20 @@ It does not validate the REDCap configuration.
 
 Known field references remain linked even when qualifiers need interpretation.
 Unknown fields and unsupported annotation candidates do not create traversable
-links. They are retained as evidence and interpretation issues. `status_note`
-contains the specific reason and is empty when no interpretation limit was found.
-That empty note does not certify a valid REDCap expression.
+links. They are retained as evidence and interpretation issues.
+
+**Interpretation note** (`status_note` in R) explains where human review is
+needed. A blank note means no interpretation limit was detected; it does not
+validate the REDCap configuration or establish that a proposed change is safe.
+The note's scope depends on the table:
+
+| Table | What the note describes |
+| --- | --- |
+| References | One reference occurrence. |
+| Summary | The grouped reference evidence for that row. |
+| Upstream / Downstream | Combined limits along the displayed representative shortest reference chain, not every alternative path. |
+| Interpretation issues (`issues`) | Issues at related metadata locations, including references outside the displayed chains. |
+| Project Diagnostics | Issues at metadata locations anywhere in the project, independent of the selected field. |
 
 Related issues are always available without requesting Project Diagnostics:
 

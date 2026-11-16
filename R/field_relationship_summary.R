@@ -1,6 +1,7 @@
 #' @title Summarize how a REDCap field is related to project metadata
-#' @description Explains the selected field's inputs, references, and direct or
-#'   indirect connections using a codebook's complete definitions.
+#' @description Identifies upstream references and downstream uses of one REDCap
+#'   field using a codebook's metadata. Helps reviewers explore project structure
+#'   and locate configuration to inspect before changing a field.
 #' @param field One exact dictionary field name, including checkbox parent names.
 #' @param codebook A codebook returned by [build_codebook()].
 #' @param include_diagnostics Include project-wide interpretation issues as an
@@ -10,41 +11,67 @@
 #'   `FALSE`. This is independent of `include_diagnostics`.
 #' @details
 #' A codebook supplies field definitions, expressions, and event/repeat context
-#' needed to interpret a field name. Build it once to explore several fields
-#' from the same metadata without repeated API calls. Record data is not needed.
+#' needed to interpret references. Build it once to explore several fields
+#' without repeated API calls. Record data is not needed. Older codebooks without
+#' complete definitions must be rebuilt.
 #'
-#' Recognized sources include branching logic, calculations, supported field
-#' annotations, piping, embedding, and the custom record label. Unresolved or
-#' unsupported constructs are retained as interpretation issues rather than guessed. The
-#' report describes relationships; it does not predict changes to stored values.
-#' Older codebooks without complete definitions must be rebuilt.
-#' @returns A `redcap_field_relationship_summary` list with seven tibbles:
-#'   `field` (complete selected definition and context), `upstream` (what the
-#'   field uses), `references` (related occurrences with original expressions and
-#'   report-local IDs), `downstream` (where the field is used), `summary`
-#'   (explanations grouped by metadata location and expression), `issues`
-#'   (related interpretation issues with original evidence), and `coverage`
-#'   (project-wide source counts, interpretation limits, and exclusions, identical
-#'   for every field using the same codebook). With `include_diagnostics = TRUE`,
-#'   the additional `diagnostics` element contains project-wide interpretation
-#'   issues, identical for every field. With `include_inspection_log = TRUE`,
-#'   `inspection_log` retains the full inspection inventory, including blank and
-#'   unavailable locations. These flags control returned detail, not analysis.
-#'   `relationship` contains machine-readable connection types; `resolution`
-#'   describes qualifier or syntax interpretation, not data quality.
-#'   `field_matched` records whether the referenced field name exists. Known
-#'   references remain linked when qualifiers need interpretation; unsupported
-#'   annotation candidates do not create traversable links. `status_note` explains
-#'   non-resolved references and is blank for resolved references.
-#'   `reference_choice` and `reference_choice_label` identify a referenced checkbox
-#'   option. `choice_code` identifies the containing choice label when the
-#'   reference occurs in a choice label; it is not the referenced option.
-#'   Upstream and downstream rows include minimum depth and a representative
-#'   shortest path of occurrence IDs. All alternative related edges remain in
-#'   `references`. Reference chains label each step but do not establish that
-#'   values or behavior will change, or that event/instance contexts connect.
-#'   Matched references do not validate REDCap configuration or establish
-#'   foreign-key relationships or referential integrity.
+#' Use dictionary field names rather than labels or exported checkbox columns.
+#' For example, supply `symptoms`, not `symptoms___fever`.
+#' @returns A list with classes `redcap_field_relationship_summary` and `list`,
+#'   containing seven tibbles by default:
+#' - `field`: the selected field's definition and context.
+#' - `upstream`: fields it references, directly or indirectly.
+#' - `downstream`: fields and project settings that reference it, directly or indirectly.
+#' - `references`: related reference occurrences with original expressions.
+#' - `summary`: explanations grouped by metadata location, expression, and reference interpretation.
+#' - `issues`: interpretation issues in selected or related metadata.
+#' - `coverage`: project-wide source counts, interpretation limits, and exclusions.
+#'
+#' Optional tibbles are `diagnostics` (project-wide interpretation issues, when
+#' `include_diagnostics = TRUE`) and `inspection_log` (the full inspection
+#' inventory, when `include_inspection_log = TRUE`).
+#' @section Reading relationships:
+#' Upstream means what the selected field references; downstream means where it
+#' is referenced. Each related item appears once, with its minimum depth and one
+#' representative shortest reference chain. Alternative related references remain
+#' in `references`.
+#'
+#' `references` has one row per occurrence; `summary` groups occurrences, so their
+#' row counts can differ. Chains describe field-level connections, not continuous
+#' paths through particular events or repeating instances.
+#' @section Interpreting references:
+#' `relationship` identifies the connection type, while `field_matched` records
+#' whether the referenced field exists in the dictionary. `resolution` describes
+#' syntax and qualifier interpretation, not data quality.
+#'
+#' `status_note` appears as **Interpretation note** in the viewer. It explains
+#' unresolved, context-dependent, or unclassified references. A blank note means
+#' no interpretation limit was detected; it does not validate the configuration.
+#' Notes apply to individual occurrences in `references`, grouped evidence in
+#' `summary`, and the displayed chain in `upstream` and `downstream`. In `issues`
+#' and `diagnostics`, they explain issues at metadata locations.
+#'
+#' Known field references remain linked when qualifiers need interpretation.
+#' Unknown fields and unsupported annotation candidates do not create traversable
+#' links; their evidence remains available in interpretation issues.
+#' @section Checkbox references:
+#' The report includes whole-checkbox and individual-option references.
+#' `reference_choice` and `reference_choice_label` identify the referenced option.
+#' `choice_code` identifies the containing choice label when an expression occurs
+#' in a choice label; it is not the referenced option.
+#' @section Inspection scope:
+#' Inspected sources include branching logic, calculations, supported field
+#' annotations, piping, embedding, and the custom record label. The report does
+#' not evaluate expressions, predict changes to stored values, or establish
+#' referential integrity. Configuration outside the inspected metadata, such as
+#' alerts and external scripts, may contain additional uses.
+#'
+#' `coverage` and optional `diagnostics` describe the entire project and are
+#' identical for every field using the same codebook. `issues` retains details
+#' relevant to the selected field and related items. The optional flags control
+#' returned detail, not analysis or API calls.
+#' @seealso [build_codebook()], [view_field_relationship_summary()],
+#'   [save_field_relationship_summary()]
 #' @examples
 #' relationships <- field_relationship_summary("weight_kg", mock_codebook)
 #' relationships
