@@ -235,29 +235,29 @@ codebook_project$metadata <- codebook_project$metadata |>
   dplyr::bind_rows(tibble::tibble(
     field_name = c(
       "baseline_weight_kg", "weight_kg", "height_cm", "bmi", "weight_review",
-      "visit_summary", "starting_weight", "weight_at_entry", "diagnostic_example"
+      "visit_summary", "starting_weight", "weight_at_entry", "diagnostic_example", "high_grade"
     ),
-    form_name = c("demographics", rep("follow_up", 8)),
-    field_type = c("text", "text", "text", "calc", "notes", "descriptive", "text", "text", "descriptive"),
+    form_name = c("demographics", rep("follow_up", 9)),
+    field_type = c("text", "text", "text", "calc", "notes", "descriptive", "text", "text", "descriptive", "radio"),
     field_label = c(
       "Baseline weight (kg)", "Weight (kg)", "Height (cm)", "Body mass index",
       "Review raised BMI", "Weight [weight_kg] kg; enter weight: {weight_kg}",
       "Initial weight (kg)", "Weight at initial form entry (kg)",
-      "Diagnostic example (deliberately unsupported): [weight_kg]"
+      "Diagnostic example (deliberately unsupported): [weight_kg]", "High grade?"
     ),
-    select_choices_or_calculations = c(NA, NA, NA, "[weight_kg] / ([height_cm]/100)^2", rep(NA_character_, 5)),
-    branching_logic = c(NA, NA, NA, NA, "[bmi] > 30", NA, NA, NA, NA),
+    select_choices_or_calculations = c(NA, NA, NA, "[weight_kg] / ([height_cm]/100)^2", rep(NA_character_, 5), "1, Yes | 0, No"),
+    branching_logic = c(NA, NA, NA, NA, "[bmi] > 30", NA, NA, NA, NA, "[symptoms(fever)] = '1'"),
     field_annotation = c(
       NA, "@DEFAULT='[baseline_arm_1][baseline_weight_kg]'", NA, NA, NA, NA,
       "@IF([weight_kg] > 0, '@DEFAULT=\"[weight_kg]\"', '@HIDDEN')",
-      "@DEFAULT='[current-event-name][weight_kg]'", "@UNKNOWN='[weight_kg]'"
+      "@DEFAULT='[current-event-name][weight_kg]'", "@UNKNOWN='[weight_kg]'", NA
     ),
     field_note = c(
       rep(NA_character_, 5), "Weight: [weight_kg]; symptom codes: [symptoms:checked:value]",
-      NA, NA, "Deliberately missing field: [retired_weight]"
+      NA, NA, "Deliberately missing field: [retired_weight]", NA
     ),
-    text_validation_type_or_show_slider_number = c("number", "number", "number", rep(NA_character_, 6)),
-    text_validation_min = c(0, 0, 0, rep(NA_real_, 6))
+    text_validation_type_or_show_slider_number = c("number", "number", "number", rep(NA_character_, 7)),
+    text_validation_min = c(0, 0, 0, rep(NA_real_, 7))
   ))
 codebook_project$project_info$custom_record_label <- "[record_id]: weight [weight_kg] kg"
 

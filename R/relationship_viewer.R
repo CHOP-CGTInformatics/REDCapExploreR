@@ -82,7 +82,10 @@ get_relationship_viewer_tables <- function(relationships) {
     ),
     summary = list(
       title = "Summary", data = get_relationship_viewer_evidence(relationships$summary, summary = TRUE),
-      description = "One explanation per referencing item, metadata location, expression, and reference interpretation."
+      description = paste(
+        "One explanation per item, metadata location, expression, and reference interpretation.",
+        "Checkbox options retain raw codes and labels."
+      )
     ),
     references = list(
       title = "References", data = get_relationship_viewer_evidence(relationships$references),
@@ -155,16 +158,19 @@ get_relationship_viewer_evidence <- function(data, summary = FALSE) {
   out <- data |>
     mutate(
       relationship = get_relationship_type_label(.data$relationship, .data$action_tag),
-      metadata_column = get_relationship_location_label(.data$metadata_column)
+      metadata_column = get_relationship_location_label(.data$metadata_column),
+      referenced_choice = get_relationship_choice_reference(
+        .data$source_field, .data$reference_choice, .data$reference_choice_label
+      )
     )
   columns <- if (summary) {
     c(
-      "dependent_name", "metadata_column", "choice_code", "relationship", "explanation",
+      "dependent_name", "metadata_column", "choice_code", "referenced_choice", "relationship", "explanation",
       "expression", "occurrence_count", "status_note"
     )
   } else {
     c(
-      "dependent_name", "source_field", "metadata_column", "choice_code", "relationship",
+      "dependent_name", "source_field", "metadata_column", "choice_code", "referenced_choice", "relationship",
       "expression", "reference_text", "field_matched", "status_note"
     )
   }
@@ -175,7 +181,7 @@ get_relationship_viewer_evidence <- function(data, summary = FALSE) {
     status_note = "Interpretation note", metadata_column = "Metadata location",
     expression = "Original expression", reference_text = "Reference text",
     occurrence_count = "Occurrences in expression", field_matched = "Field name matched",
-    choice_code = "Choice code"
+    choice_code = "Containing choice code", referenced_choice = "Referenced choice"
   )
   names(out) <- unname(labels[names(out)])
   out
@@ -226,7 +232,7 @@ get_relationship_viewer_issues <- function(data) {
       .keep = "none",
       Item = .data$dependent_name,
       `Metadata location` = get_relationship_location_label(.data$metadata_column),
-      `Choice code` = .data$choice_code,
+      `Containing choice code` = .data$choice_code,
       `Original expression` = .data$expression,
       `Interpretation note` = .data$status_note
     )

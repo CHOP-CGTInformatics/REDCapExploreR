@@ -80,7 +80,8 @@ get_project_relationship_references <- function(sources, codebook) {
     start = integer(), end = integer(), relationship = character(), action_tag = character(),
     field_matched = logical(), interpretation = character(),
     interpretation_reason = character(), event = character(), instance = character(),
-    modifier = character(), reference_choice = character(), resolution = character(),
+    modifier = character(), reference_choice = character(), reference_choice_label = character(),
+    resolution = character(),
     reason = character(), event_context = character()
   )
   raw <- bind_rows(map(seq_len(nrow(sources)), \(i) get_relationship_source_references(sources[i, ])))
@@ -274,6 +275,8 @@ get_resolved_relationship <- function(token, codebook) {
   instance <- if (!is.na(field_index) && field_index < length(parts)) parts[[field_index + 1L]] else NA_character_
   modifier <- str_match(field_token, "^[^:]+:(.*)$")[1, 2]
   choice <- str_match(field_token, "^[^(]+\\(([^)]+)\\)")[1, 2]
+  choice_index <- which(codebook$choices$field_name == field &
+    codebook$choices$choice_value == choice & codebook$choices$choice_type == "checkbox")
   issues <- character()
   dynamic <- character()
   if (length(parts) > 3 || (!is.na(field_index) && field_index > 2)) {
@@ -286,8 +289,7 @@ get_resolved_relationship <- function(token, codebook) {
       fields$form_name[match(field, fields$field_name)] != fields$form_name[match(token$dependent_name, fields$field_name)]) {
       issues <- c(issues, "Field embedding requires fields on the same instrument.")
     }
-    if (!is.na(choice) && !any(codebook$choices$field_name == field &
-      codebook$choices$choice_value == choice & codebook$choices$choice_type == "checkbox")) {
+    if (!is.na(choice) && length(choice_index) == 0) {
       issues <- c(issues, "Checkbox choice is not defined for this field.")
     }
     if (!is.na(event)) {
@@ -325,6 +327,7 @@ get_resolved_relationship <- function(token, codebook) {
   token$instance <- instance
   token$modifier <- modifier
   token$reference_choice <- choice
+  token$reference_choice_label <- if (length(choice_index) > 0) codebook$choices$choice_label[[choice_index[[1]]]] else NA_character_
   token$resolution <- status
   token$reason <- reason
   token$event_context <- if (is.na(event)) "current" else "explicit_or_dynamic"

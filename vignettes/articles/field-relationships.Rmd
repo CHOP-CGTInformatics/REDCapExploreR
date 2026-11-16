@@ -69,6 +69,41 @@ checkbox columns, such as `symptoms___fever`, are not accepted. The report inclu
 references to the checkbox as a whole and to its individual choices; it does not
 produce a separate relationship report for one choice.
 
+### Checkbox options in relationships
+
+The bundled `high_grade` field ("High grade?", Yes/No) has branching logic
+`[symptoms(fever)] = '1'`. Selecting the parent `symptoms` field finds that
+Fever-specific use:
+
+```{r checkbox-option}
+checkbox <- field_relationship_summary("symptoms", mock_codebook)
+checkbox$summary |>
+  dplyr::filter(dependent_name == "high_grade") |>
+  dplyr::select(dependent_name, reference_choice, reference_choice_label, expression, explanation)
+```
+
+Summary describes this as "high_grade references [symptoms(fever)] (Fever) in its
+branching logic." The display retains the raw code `fever` and adds its label
+`Fever`; numeric codes, including leading zeros, are preserved. No equivalent
+relationship is created for the other checkbox options unless metadata references
+them.
+
+In Summary and References:
+
+- **Referenced choice** identifies the option being used, such as
+  `[symptoms(fever)] (Fever)`. It is blank for whole-checkbox references such as
+  `[symptoms:checked]`, and for references without an individual checkbox option.
+- **Containing choice code** identifies the choice label that contains the
+  expression. For example, if choice `1` of `follow_up` has the label
+  `"Details for [symptoms(fever)]"`, its containing choice code is `1`, while
+  its referenced choice is `[symptoms(fever)] (Fever)`. This column is blank
+  when the reference is in branching logic or another non-choice-label location.
+
+The R columns remain `reference_choice` (referenced raw code),
+`reference_choice_label` (referenced label), and `choice_code` (containing code).
+Unknown options retain their raw reference with an interpretation note; a label
+is only added when that option exists in the codebook.
+
 ## Read upstream and downstream correctly
 
 Upstream means fields referenced by the selected field. Downstream means fields

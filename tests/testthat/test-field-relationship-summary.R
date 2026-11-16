@@ -238,3 +238,39 @@ test_that("the full inspection log is an independent opt-in", {
     expect_error(field_relationship_summary("age", mock_codebook, include_inspection_log = flag), "include_inspection_log.*TRUE or FALSE")
   })
 })
+
+test_that("checkbox explanations identify raw option codes and labels without inventing other links", {
+  report <- field_relationship_summary("symptoms", get_checkbox_relationship_codebook())
+  grade <- dplyr::filter(report$summary, .data$dependent_name == "high_grade")
+  expect_equal(grade$reference_choice, "fever")
+  expect_equal(grade$reference_choice_label, "Fever")
+  expect_equal(grade$explanation, "high_grade references [symptoms(fever)] (Fever) in its branching logic.")
+  expect_equal(grade$expression, "[symptoms(fever)] = '1'")
+  expect_false(any(report$references$reference_choice == "cough", na.rm = TRUE))
+  expect_true("high_grade" %in% report$downstream$item_name)
+  general <- dplyr::filter(report$summary, .data$dependent_name == "display")
+  expect_true(is.na(general$reference_choice))
+  expect_equal(general$explanation, "display pipes data or labels from symptoms.")
+})
+
+test_that("checkbox explanations preserve numeric codes and unknown options", {
+  book <- get_checkbox_relationship_codebook()
+  metadata <- book$definitions$fields
+  metadata$select_choices_or_calculations[metadata$field_name == "symptoms"] <- "01, Fever | 02, Cough"
+  metadata$select_choices_or_calculations[metadata$field_name == "prompt"] <- "1, Details for [symptoms(01)] | 2, Other"
+  metadata$branching_logic[metadata$field_name == "high_grade"] <- "[symptoms(01)] = '1'"
+  book <- get_codebook(get_codebook_project(list(metadata = metadata)))
+  report <- field_relationship_summary("symptoms", book)
+  grade <- dplyr::filter(report$summary, .data$dependent_name == "high_grade")
+  expect_equal(grade$reference_choice, "01")
+  expect_equal(grade$reference_choice_label, "Fever")
+  expect_equal(grade$explanation, "high_grade references [symptoms(01)] (Fever) in its branching logic.")
+  book$definitions$fields$branching_logic[book$definitions$fields$field_name == "high_grade"] <- "[symptoms(missing)] = '1'"
+  unknown <- field_relationship_summary("symptoms", book)$summary |>
+    dplyr::filter(.data$dependent_name == "high_grade")
+  expect_equal(unknown$reference_choice, "missing")
+  expect_true(is.na(unknown$reference_choice_label))
+  expect_equal(unknown$resolution, "unresolved")
+  expect_match(unknown$explanation, "[symptoms(missing)]", fixed = TRUE)
+  expect_false(stringr::str_detect(unknown$explanation, "Fever"))
+})

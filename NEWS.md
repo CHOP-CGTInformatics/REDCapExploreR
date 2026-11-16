@@ -1,5 +1,10 @@
 # REDCapExploreR 0.1.0
 
+* Identify referenced checkbox options in Summary using REDCap field notation,
+  raw codes, and labels. Add Referenced choice to relationship viewer tables and
+  clarify the source choice-label column as Containing choice code. Demonstrate
+  Fever-specific branching in the bundled codebook and vignette.
+
 * Rename the optional diagnostics viewer to Project Diagnostics and show only
   project-wide interpretation issues. Request `include_inspection_log = TRUE`
   separately for the complete inspection inventory and Full Inspection Log viewer.

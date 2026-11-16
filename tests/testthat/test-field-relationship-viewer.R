@@ -108,7 +108,9 @@ test_that("Project Diagnostics shows issue evidence and the full log remains sep
   tables <- get_relationship_viewer_tables(project)
   expect_equal(tables$diagnostics$title, "Project Diagnostics")
   expect_equal(nrow(tables$diagnostics$data), 3L)
-  expect_equal(names(tables$diagnostics$data), c("Item", "Metadata location", "Choice code", "Original expression", "Interpretation note"))
+  expect_equal(names(tables$diagnostics$data), c(
+    "Item", "Metadata location", "Containing choice code", "Original expression", "Interpretation note"
+  ))
   expect_false("inspection_log" %in% names(tables))
   expect_false("diagnostics" %in% names(get_relationship_viewer_tables(log)))
   expect_equal(get_relationship_viewer_tables(log)$inspection_log$title, "Full Inspection Log")
@@ -124,4 +126,27 @@ test_that("empty Project Diagnostics describes the absence of interpretation iss
   report <- field_relationship_summary("weight_kg", get_weight_codebook(), include_diagnostics = TRUE)
   expect_equal(nrow(report$diagnostics), 0L)
   expect_match(as.character(view_field_relationship_summary(report)), "No project-wide interpretation issues were found", fixed = TRUE)
+})
+
+test_that("relationship tables distinguish referenced options from containing choice labels", {
+  report <- field_relationship_summary("symptoms", get_checkbox_relationship_codebook())
+  tables <- get_relationship_viewer_tables(report)
+  purrr::walk(c("summary", "references"), \(section) {
+    data <- tables[[section]]$data
+    grade <- data[data[["Referencing item"]] == "high_grade", ]
+    expect_equal(grade[["Referenced choice"]], "[symptoms(fever)] (Fever)")
+    expect_true(is.na(grade[["Containing choice code"]]))
+    prompt <- data[data[["Referencing item"]] == "prompt", ]
+    expect_equal(prompt[["Containing choice code"]], "1")
+    expect_equal(prompt[["Referenced choice"]], "[symptoms(fever)] (Fever)")
+    general <- data[data[["Referencing item"]] == "display", ]
+    expect_true(is.na(general[["Referenced choice"]]))
+    expect_false("Choice code" %in% names(data))
+  })
+  file <- tempfile(fileext = ".html")
+  save_field_relationship_summary(report, file)
+  html <- paste(readLines(file, warn = FALSE), collapse = "\n")
+  expect_match(html, "Referenced choice", fixed = TRUE)
+  expect_match(html, "Containing choice code", fixed = TRUE)
+  expect_match(html, "[symptoms(fever)] (Fever)", fixed = TRUE)
 })

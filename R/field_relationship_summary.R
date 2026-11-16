@@ -36,6 +36,9 @@
 #'   references remain linked when qualifiers need interpretation; unsupported
 #'   annotation candidates do not create traversable links. `status_note` explains
 #'   non-resolved references and is blank for resolved references.
+#'   `reference_choice` and `reference_choice_label` identify a referenced checkbox
+#'   option. `choice_code` identifies the containing choice label when the
+#'   reference occurs in a choice label; it is not the referenced option.
 #'   Upstream and downstream rows include minimum depth and a representative
 #'   shortest path of occurrence IDs. All alternative related edges remain in
 #'   `references`. Reference chains label each step but do not establish that
@@ -266,10 +269,15 @@ get_relationship_explanations <- function(field, references, upstream, downstrea
       .by = c(
         "source_field", "dependent_kind", "dependent_name", "source_id", "metadata_column",
         "choice_code", "expression", "relationship", "action_tag", "field_matched", "resolution",
-        "traversal_role", "event", "instance", "modifier", "reference_choice"
+        "traversal_role", "event", "instance", "modifier", "reference_choice", "reference_choice_label"
       )
     ) |>
     mutate(
+      referenced_item = if_else(
+        is.na(.data$reference_choice),
+        if_else(is.na(.data$source_field), "an unidentified field", .data$source_field),
+        get_relationship_choice_reference(.data$source_field, .data$reference_choice, .data$reference_choice_label)
+      ),
       verb = case_when(
         .data$resolution == "unclassified" ~ "contains an unclassified candidate reference to ",
         .data$resolution == "unresolved" ~ "contains an unresolved reference to ",
@@ -288,12 +296,12 @@ get_relationship_explanations <- function(field, references, upstream, downstrea
       ),
       explanation = paste0(
         .data$dependent_name, " ", .data$verb,
-        if_else(is.na(.data$source_field), "an unidentified field", .data$source_field), .data$purpose, ".",
+        .data$referenced_item, .data$purpose, ".",
         if_else(.data$direct, "", paste0(" Connected to ", field, " through a reference chain.")),
         if_else(.data$resolution == "context_dependent", " Event or instance context needs interpretation.", "")
       )
     ) |>
-    select(-c("verb", "purpose"))
+    select(-c("verb", "purpose", "referenced_item"))
   paths <- map(seq_len(nrow(out)), \(i) {
     incoming <- out$traversal_role[[i]] == "upstream" ||
       (out$dependent_kind[[i]] == "field" && out$dependent_name[[i]] == field)
@@ -376,4 +384,18 @@ get_relationship_status_note <- function(resolution, reason) {
     TRUE ~ ""
   )
   if_else(resolution == "resolved", "", paste0(label, ifelse(get_is_missing(reason), "", paste0(": ", reason))))
+}
+
+#' @title Describe an explicit checkbox choice reference
+#' @description Preserves REDCap field notation and raw choice codes, with labels when available.
+#' @param field Referenced dictionary field names.
+#' @param choice Referenced raw checkbox choice codes.
+#' @param label Checkbox choice labels, or NA when unavailable.
+#' @returns Checkbox references with labels; NA for references without a choice.
+#' @noRd
+get_relationship_choice_reference <- function(field, choice, label) {
+  if_else(
+    is.na(choice), NA_character_,
+    paste0("[", field, "(", choice, ")]", if_else(get_is_missing(label), "", paste0(" (", label, ")")))
+  )
 }

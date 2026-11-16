@@ -24,3 +24,18 @@ get_weight_codebook <- function() {
     repeating_instruments = tibble::tibble(event_name = "followup_arm_1", form_name = "main")
   )))
 }
+
+get_checkbox_relationship_codebook <- function() {
+  metadata <- tibble::tibble(
+    field_name = c("record_id", "symptoms", "high_grade", "prompt", "display"),
+    form_name = "main",
+    field_type = c("text", "checkbox", "radio", "radio", "descriptive"),
+    field_label = c("Record ID", "Symptoms", "High grade?", "Follow-up", "Symptoms: [symptoms:checked]"),
+    select_choices_or_calculations = c(
+      NA, "fever, Fever | cough, Cough", "1, Yes | 0, No",
+      "1, Details for [symptoms(fever)] | 2, Other", NA
+    ),
+    branching_logic = c(NA, NA, "[symptoms(fever)] = '1'", NA, NA)
+  )
+  get_codebook(get_codebook_project(list(metadata = metadata)))
+}

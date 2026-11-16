@@ -42,6 +42,9 @@ describes qualifier or syntax interpretation, not data quality.
 references remain linked when qualifiers need interpretation; unsupported
 annotation candidates do not create traversable links. \code{status_note} explains
 non-resolved references and is blank for resolved references.
+\code{reference_choice} and \code{reference_choice_label} identify a referenced checkbox
+option. \code{choice_code} identifies the containing choice label when the
+reference occurs in a choice label; it is not the referenced option.
 Upstream and downstream rows include minimum depth and a representative
 shortest path of occurrence IDs. All alternative related edges remain in
 \code{references}. Reference chains label each step but do not establish that
