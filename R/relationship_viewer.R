@@ -92,15 +92,7 @@ get_relationship_viewer_tables <- function(relationships) {
   if (nrow(relationships$issues) > 0) {
     tables$issues <- list(
       title = "Interpretation issues",
-      data = relationships$issues |>
-        mutate(
-          .keep = "none",
-          Item = .data$dependent_name,
-          `Metadata location` = get_relationship_location_label(.data$metadata_column),
-          `Choice code` = .data$choice_code,
-          `Original expression` = .data$expression,
-          `Interpretation note` = .data$status_note
-        ),
+      data = get_relationship_viewer_issues(relationships$issues),
       description = paste(
         "Issues involving the selected field or related items, including references outside the displayed chains.",
         "These are interpretation limits, not a count of invalid REDCap settings."
@@ -108,13 +100,13 @@ get_relationship_viewer_tables <- function(relationships) {
     )
   }
   tables$coverage <- list(
-    title = "Coverage",
+    title = "Project Coverage",
     data = relationships$coverage |>
       mutate(
         .keep = "none",
         `Inspection scope` = case_when(
           .data$scope == "sources" ~ "Project sources",
-          .data$scope == "project_notes" ~ "Other project interpretation limits",
+          .data$scope == "project_notes" ~ "Project interpretation limits",
           TRUE ~ "Excluded configuration"
         ), `Metadata source` = get_relationship_location_label(.data$metadata_column),
         `Inspection status` = case_when(
@@ -127,15 +119,26 @@ get_relationship_viewer_tables <- function(relationships) {
         `Project reference occurrences` = .data$reference_count, Explanation = .data$note
       ),
     description = paste(
-      "Project-wide source availability and exclusions, not counts for this field.",
+      "Project-wide sources, interpretation limits, and exclusions; identical for every field in this codebook.",
+      "Field-specific interpretation details appear in Interpretation issues.",
       "Source counts and interpretation-limit counts overlap and must not be added together.",
-      "Request include_diagnostics = TRUE for the full project inventory."
+      "Request include_diagnostics = TRUE for Project Diagnostics and include_inspection_log = TRUE for the full log."
     )
   )
   if (!is.null(relationships$diagnostics)) {
     tables$diagnostics <- list(
-      title = "Diagnostics", data = relationships$diagnostics,
-      description = "Optional project-wide diagnostics, including blank metadata locations."
+      title = "Project Diagnostics", data = get_relationship_viewer_issues(relationships$diagnostics),
+      description = if (nrow(relationships$diagnostics) == 0) {
+        "No project-wide interpretation issues were found in the inspected metadata."
+      } else {
+        "Interpretation issues across the entire project, independent of the selected field."
+      }
+    )
+  }
+  if (!is.null(relationships$inspection_log)) {
+    tables$inspection_log <- list(
+      title = "Full Inspection Log", data = relationships$inspection_log,
+      description = "Explicitly requested project-wide inspection records, including blank, unavailable, and inspected locations."
     )
   }
   tables
@@ -210,4 +213,21 @@ get_relationship_location_label <- function(column) {
     section_header = "Section header", choice_label = "Choice label", custom_record_label = "Custom record label"
   )
   if_else(column %in% names(labels), unname(labels[column]), column)
+}
+
+#' @title Present interpretation issue evidence
+#' @description Shares readable columns across related issues and Project Diagnostics.
+#' @param data Related or project-wide interpretation issues.
+#' @returns An issue table with original evidence and interpretation notes.
+#' @noRd
+get_relationship_viewer_issues <- function(data) {
+  data |>
+    mutate(
+      .keep = "none",
+      Item = .data$dependent_name,
+      `Metadata location` = get_relationship_location_label(.data$metadata_column),
+      `Choice code` = .data$choice_code,
+      `Original expression` = .data$expression,
+      `Interpretation note` = .data$status_note
+    )
 }

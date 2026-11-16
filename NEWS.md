@@ -1,5 +1,13 @@
 # REDCapExploreR 0.1.0
 
+* Rename the optional diagnostics viewer to Project Diagnostics and show only
+  project-wide interpretation issues. Request `include_inspection_log = TRUE`
+  separately for the complete inspection inventory and Full Inspection Log viewer.
+
+* Make relationship report coverage identical for every field using the same
+  codebook. Project Coverage includes all project interpretation limits;
+  field-specific evidence remains in Issues.
+
 * Handle REDCap's explicit non-applicable event, form/event mapping, and arm
   responses for classic projects, and the response for projects without repeats.
   Codebooks, record-status data, and quality reports retain genuine API errors

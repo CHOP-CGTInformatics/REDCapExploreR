@@ -121,10 +121,12 @@ test_that("coverage stays compact as unrelated blank fields are added", {
   )
   large <- get_codebook(get_codebook_project(list(metadata = dplyr::bind_rows(book$definitions$fields, extra))))
   report <- field_relationship_summary("weight_kg", large)
-  detailed <- field_relationship_summary("weight_kg", large, include_diagnostics = TRUE)
+  detailed <- field_relationship_summary("weight_kg", large, include_diagnostics = TRUE, include_inspection_log = TRUE)
   expect_lt(nrow(report$coverage), 20)
   expect_false("diagnostics" %in% names(report))
-  expect_gt(nrow(detailed$diagnostics), 5000)
+  expect_equal(nrow(detailed$diagnostics), 0L)
+  expect_gt(nrow(detailed$inspection_log), 5000)
+  expect_false("inspection_log" %in% names(report))
   expect_equal(report$coverage, detailed$coverage)
   expect_true(all(nchar(report$coverage$examples) < 200))
 })
@@ -174,5 +176,65 @@ test_that("no-argument action tags do not create interpretation issues", {
 test_that("the diagnostics flag requires one logical value", {
   purrr::walk(list(NA, 1, c(TRUE, FALSE)), \(flag) {
     expect_error(field_relationship_summary("weight_kg", get_weight_codebook(), include_diagnostics = flag), "TRUE or FALSE")
+  })
+})
+
+test_that("project coverage includes all interpretation limits independently of the field", {
+  fields <- c("weight_kg", "age", "diagnostic_example", "symptoms")
+  reports <- stats::setNames(purrr::map(fields, \(field) field_relationship_summary(field, mock_codebook)), fields)
+  purrr::walk(reports, \(report) expect_equal(report$coverage, reports$weight_kg$coverage))
+  limits <- dplyr::filter(reports$weight_kg$coverage, .data$scope == "project_notes")
+  expect_equal(nrow(limits), 1L)
+  expect_equal(limits$location_count, 3L)
+  expect_equal(limits$reference_count, 3L)
+  expect_equal(nrow(reports$age$issues), 0L)
+  expect_equal(nrow(reports$weight_kg$issues), 3L)
+  expect_setequal(reports$weight_kg$issues$dependent_name, c("diagnostic_example", "weight_at_entry"))
+})
+
+test_that("projects without interpretation limits omit the project notes aggregate", {
+  report <- field_relationship_summary("weight_kg", get_weight_codebook())
+  expect_false("project_notes" %in% report$coverage$scope)
+  expect_equal(nrow(report$issues), 0L)
+})
+
+test_that("project diagnostics retain interpretation issues without the inspection inventory", {
+  weight <- field_relationship_summary("weight_kg", mock_codebook, include_diagnostics = TRUE)
+  age <- field_relationship_summary("age", mock_codebook, include_diagnostics = TRUE)
+  expect_equal(weight$diagnostics, age$diagnostics)
+  expect_equal(nrow(age$issues), 0L)
+  expect_equal(nrow(age$diagnostics), 3L)
+  expect_setequal(age$diagnostics$status, c("unresolved", "unclassified", "context_dependent"))
+  expect_true(all(nzchar(age$diagnostics$expression)))
+  expect_true(all(nzchar(age$diagnostics$status_note)))
+  expect_false("row_kind" %in% names(age$diagnostics))
+  expect_false("inspection_log" %in% names(age))
+  expect_equal(weight$issues, weight$diagnostics)
+})
+
+test_that("project diagnostics include malformed sources without reference tokens", {
+  book <- get_weight_codebook()
+  book$definitions$fields$branching_logic[10] <- "[weight_kg > 10"
+  report <- field_relationship_summary("height_cm", book, include_diagnostics = TRUE)
+  issue <- dplyr::filter(report$diagnostics, .data$dependent_name == "symptoms")
+  expect_equal(issue$status, "unclassified")
+  expect_equal(issue$detail, "Unmatched reference brackets.")
+  expect_equal(issue$expression, "[weight_kg > 10")
+  expect_length(issue$occurrence_ids[[1]], 0)
+  expect_false("symptoms" %in% report$issues$dependent_name)
+})
+
+test_that("the full inspection log is an independent opt-in", {
+  ordinary <- field_relationship_summary("age", mock_codebook)
+  log <- field_relationship_summary("age", mock_codebook, include_inspection_log = TRUE)
+  both <- field_relationship_summary("age", mock_codebook, include_diagnostics = TRUE, include_inspection_log = TRUE)
+  expect_false("diagnostics" %in% names(log))
+  expect_true(all(c("source", "reference", "scope") %in% log$inspection_log$row_kind))
+  expect_true(all(c("blank", "inspected", "not_inspected") %in% log$inspection_log$status))
+  expect_equal(log$inspection_log, both$inspection_log)
+  expect_equal(ordinary$coverage, both$coverage)
+  expect_equal(ordinary$issues, both$issues)
+  purrr::walk(list(NA, 1, c(TRUE, FALSE)), \(flag) {
+    expect_error(field_relationship_summary("age", mock_codebook, include_inspection_log = flag), "include_inspection_log.*TRUE or FALSE")
   })
 })

@@ -1,11 +1,11 @@
-#' @title Retain detailed source and reference diagnostics
+#' @title Retain the complete relationship inspection log
 #' @description Makes unavailable columns and out-of-scope configuration explicit.
 #' @param sources Metadata locations and availability.
 #' @param references All extracted project occurrences.
 #' @param codebook A validated codebook.
 #' @returns Source coverage and reference-level interpretation limits.
 #' @noRd
-get_relationship_diagnostics <- function(sources, references, codebook) {
+get_relationship_inspection_log <- function(sources, references, codebook) {
   counts <- references |> count(.data$source_id, name = "reference_count")
   coverage <- sources |>
     left_join(counts, by = "source_id") |>
@@ -74,15 +74,14 @@ get_relationship_diagnostics <- function(sources, references, codebook) {
     mutate(definitions_version = codebook$definitions$schema_version, parser_version = 1L)
 }
 
-#' @title Summarize relationship scope without listing every metadata location
-#' @description Groups project-wide available sources, with
-#'   an aggregate disclosure of limitations elsewhere in the project.
-#' @param diagnostics Detailed source and reference diagnostics.
-#' @param report Field definition and related items with their reference evidence.
-#' @returns Compact coverage rows with counts and bounded example lists.
+#' @title Summarize project-wide relationship inspection scope
+#' @description Groups available sources and all project interpretation limits
+#'   independently of the selected field.
+#' @param inspection_log Complete project inspection log.
+#' @returns Compact project-wide source counts, interpretation limits, and exclusions.
 #' @noRd
-get_relationship_coverage <- function(diagnostics, report) {
-  sources <- diagnostics |>
+get_relationship_coverage <- function(inspection_log) {
+  sources <- inspection_log |>
     filter(.data$row_kind == "source", .data$context != "unsupported") |>
     summarise(
       location_count = n(), available_count = sum(.data$available),
@@ -105,19 +104,18 @@ get_relationship_coverage <- function(diagnostics, report) {
       ),
       examples = ""
     )
-  notes <- diagnostics |>
+  notes <- inspection_log |>
     filter(.data$status %in% c("unresolved", "unclassified", "context_dependent"))
-  other <- notes |> filter(!.data$source_id %in% report$issues$source_id)
-  other_notes <- if (nrow(other) == 0) {
+  project_notes <- if (nrow(notes) == 0) {
     sources[0, ]
   } else {
     tibble(
       scope = "project_notes", metadata_column = NA_character_, status = "interpretation_limits",
-      location_count = n_distinct(other$source_id), reference_count = sum(other$row_kind == "reference"),
+      location_count = n_distinct(notes$source_id), reference_count = sum(notes$row_kind == "reference"),
       note = paste(
-        "Some other project metadata could not be fully interpreted.",
-        "Additional references to this field may therefore be missing from this report.",
-        "Request diagnostics to inspect those locations."
+        "Some project metadata could not be fully interpreted.",
+        "Relationship reports may therefore omit references.",
+        "Request Project Diagnostics to inspect those locations."
       ), examples = ""
     )
   }
@@ -130,13 +128,13 @@ get_relationship_coverage <- function(diagnostics, report) {
       "are outside the interpreted sources."
     ), examples = ""
   )
-  bind_rows(sources, other_notes, boundaries) |>
-    mutate(definitions_version = diagnostics$definitions_version[[1]], parser_version = diagnostics$parser_version[[1]])
+  bind_rows(sources, project_notes, boundaries) |>
+    mutate(definitions_version = inspection_log$definitions_version[[1]], parser_version = inspection_log$parser_version[[1]])
 }
 
 #' @title Retain actionable interpretation issues for related metadata
 #' @description Includes original evidence even when it is outside the reference chain.
-#' @param diagnostics Project-wide source and reference diagnostics.
+#' @param diagnostics Project-wide interpretation issues.
 #' @param report Selected field and related items.
 #' @returns One row per related metadata location and interpretation status.
 #' @noRd
@@ -145,11 +143,20 @@ get_relationship_issues <- function(diagnostics, report) {
   settings <- report$downstream$item_name[report$downstream$item_kind == "project_setting"]
   diagnostics |>
     filter(
-      .data$status %in% c("unresolved", "unclassified", "context_dependent"),
       (.data$dependent_kind == "field" & .data$dependent_name %in% fields) |
         (.data$dependent_kind == "project_setting" & .data$dependent_name %in% settings) |
-        .data$occurrence_id %in% report$references$occurrence_id
-    ) |>
+        map_lgl(.data$occurrence_ids, \(ids) any(ids %in% report$references$occurrence_id))
+    )
+}
+
+#' @title Summarize project-wide interpretation issues
+#' @description Retains issue evidence without blank, inspected, or unavailable source rows.
+#' @param inspection_log Complete project inspection log.
+#' @returns One row per metadata location and interpretation status.
+#' @noRd
+get_relationship_diagnostics <- function(inspection_log) {
+  inspection_log |>
+    filter(.data$status %in% c("unresolved", "unclassified", "context_dependent")) |>
     summarise(
       detail = paste(unique(if (any(.data$row_kind == "source")) {
         .data$detail[.data$row_kind == "source"]

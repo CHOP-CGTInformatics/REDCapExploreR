@@ -3,8 +3,11 @@
 #'   indirect connections using a codebook's complete definitions.
 #' @param field One exact dictionary field name, including checkbox parent names.
 #' @param codebook A codebook returned by [build_codebook()].
-#' @param include_diagnostics Include the full project-wide source and reference
-#'   diagnostics as an additional `diagnostics` tibble. Default is `FALSE`.
+#' @param include_diagnostics Include project-wide interpretation issues as an
+#'   additional `diagnostics` tibble (Project Diagnostics). Default is `FALSE`.
+#' @param include_inspection_log Include every inspected metadata location and
+#'   reference diagnostic as an additional `inspection_log` tibble. Default is
+#'   `FALSE`. This is independent of `include_diagnostics`.
 #' @details
 #' A codebook supplies field definitions, expressions, and event/repeat context
 #' needed to interpret a field name. Build it once to explore several fields
@@ -21,8 +24,12 @@
 #'   report-local IDs), `downstream` (where the field is used), `summary`
 #'   (explanations grouped by metadata location and expression), `issues`
 #'   (related interpretation issues with original evidence), and `coverage`
-#'   (project-wide source counts and scope boundaries). With `include_diagnostics = TRUE`,
-#'   the additional `diagnostics` element retains all metadata locations and issues.
+#'   (project-wide source counts, interpretation limits, and exclusions, identical
+#'   for every field using the same codebook). With `include_diagnostics = TRUE`,
+#'   the additional `diagnostics` element contains project-wide interpretation
+#'   issues, identical for every field. With `include_inspection_log = TRUE`,
+#'   `inspection_log` retains the full inspection inventory, including blank and
+#'   unavailable locations. These flags control returned detail, not analysis.
 #'   `relationship` contains machine-readable connection types; `resolution`
 #'   describes qualifier or syntax interpretation, not data quality.
 #'   `field_matched` records whether the referenced field name exists. Known
@@ -40,8 +47,8 @@
 #' relationships
 #' relationships$summary
 #' @export
-field_relationship_summary <- function(field, codebook, include_diagnostics = FALSE) {
-  get_validate_relationship_input(field, codebook, include_diagnostics)
+field_relationship_summary <- function(field, codebook, include_diagnostics = FALSE, include_inspection_log = FALSE) {
+  get_validate_relationship_input(field, codebook, include_diagnostics, include_inspection_log)
   sources <- get_relationship_sources(codebook)
   references <- get_project_relationship_references(sources, codebook)
   edges <- references |>
@@ -81,10 +88,12 @@ field_relationship_summary <- function(field, codebook, include_diagnostics = FA
     downstream = get_relationship_items(codebook, downstream, references, "downstream"),
     summary = get_relationship_explanations(field, related, upstream, downstream)
   )
-  diagnostics <- get_relationship_diagnostics(sources, references, codebook)
+  inspection_log <- get_relationship_inspection_log(sources, references, codebook)
+  diagnostics <- get_relationship_diagnostics(inspection_log)
   report$issues <- get_relationship_issues(diagnostics, report)
-  report$coverage <- get_relationship_coverage(diagnostics, report)
+  report$coverage <- get_relationship_coverage(inspection_log)
   if (include_diagnostics) report$diagnostics <- diagnostics
+  if (include_inspection_log) report$inspection_log <- inspection_log
   class(report) <- c("redcap_field_relationship_summary", "list")
   report
 }
@@ -93,12 +102,16 @@ field_relationship_summary <- function(field, codebook, include_diagnostics = FA
 #' @description Checks the complete definition schema at the public boundary.
 #' @param field A requested field name.
 #' @param codebook A codebook object.
-#' @param include_diagnostics Whether detailed diagnostics were requested.
+#' @param include_diagnostics Whether project-wide interpretation issues were requested.
+#' @param include_inspection_log Whether the full inspection inventory was requested.
 #' @returns Nothing; invalid inputs raise an error.
 #' @noRd
-get_validate_relationship_input <- function(field, codebook, include_diagnostics) {
+get_validate_relationship_input <- function(field, codebook, include_diagnostics, include_inspection_log) {
   if (!is.logical(include_diagnostics) || length(include_diagnostics) != 1 || is.na(include_diagnostics)) {
     cli_abort("{.arg include_diagnostics} must be TRUE or FALSE.")
+  }
+  if (!is.logical(include_inspection_log) || length(include_inspection_log) != 1 || is.na(include_inspection_log)) {
+    cli_abort("{.arg include_inspection_log} must be TRUE or FALSE.")
   }
   if (!is.character(field) || length(field) != 1 || is.na(field) || trimws(field) == "") {
     cli_abort("{.arg field} must be one nonblank dictionary field name.")
@@ -144,10 +157,10 @@ print.redcap_field_relationship_summary <- function(x, ...) {
     cat(paste(get_relationship_type_label(types$relationship), types$n, sep = ": ", collapse = "; "), "\n", sep = "")
   }
   cat("Interpretation issues: ", n_distinct(x$issues$source_id), " related metadata locations (see issues).\n", sep = "")
-  cat("Coverage: project-wide metadata inspection; see coverage for sources and exclusions.\n")
+  cat("Project Coverage: project-wide metadata inspection; see coverage for sources and exclusions.\n")
   cat("Indirect connections are reference chains, not predictions of value or behavior changes.\n")
   if (any(x$coverage$scope == "project_notes")) {
-    cat("Other interpretation limits elsewhere in the project are summarized in coverage.\n")
+    cat("Project interpretation limits are summarized in coverage.\n")
   }
   invisible(x)
 }

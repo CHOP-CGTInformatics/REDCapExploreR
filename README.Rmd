@@ -83,11 +83,14 @@ relationships
 
 Use `relationships$references` for original expressions and
 `relationships$issues` for related interpretation issues and
-`relationships$coverage` for project-wide inspection scope. The viewer
-uses the same Upstream, Downstream, Summary, and Coverage terms and shows all
+`relationships$coverage` for project-wide inspection scope, identical for every
+field summarized from the same codebook. The viewer
+uses the same Upstream, Downstream, Summary, and Project Coverage terms and shows all
 references by default. The bundled codebook includes indirect paths, annotations,
 and interpretation notes around `weight_kg`. Request `include_diagnostics = TRUE` when
-constructing the report to include full project-wide diagnostics. View and save
+constructing the report to include Project Diagnostics: interpretation issues
+across the entire project. Request `include_inspection_log = TRUE` separately
+for the exhaustive inspection log, including blank and unavailable locations. View and save
 with
 `view_field_relationship_summary()` and `save_field_relationship_summary()`.
 

@@ -28,7 +28,7 @@ test_that("mock relationship example includes inputs, indirect uses, and interpr
   ))
   expect_setequal(unique(report$references$resolution), c("resolved", "context_dependent", "unclassified"))
   expect_true(all(nzchar(report$references$status_note[report$references$resolution != "resolved"])))
-  missing <- dplyr::filter(report$diagnostics, .data$row_kind == "reference", .data$status == "unresolved")
+  missing <- dplyr::filter(report$diagnostics, .data$status == "unresolved")
   expect_match(missing$expression, "retired_weight", fixed = TRUE)
   expect_lt(nrow(report$coverage), 20L)
 })

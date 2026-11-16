@@ -104,7 +104,7 @@ or guarantees of referential integrity.
 | `summary` / Summary | Human explanations grouped by item, metadata location, expression, and interpretation. |
 | `references` / References | Individual occurrences with original expressions and reference tokens. |
 | `issues` / Interpretation issues | Related interpretation limits with their location, expression, and reason. This viewer section appears when issues exist. |
-| `coverage` / Coverage | Project-wide source availability, other interpretation limits, and exclusions. |
+| `coverage` / Project Coverage | Field-independent project source availability, all interpretation limits, and exclusions. |
 
 ```{r summary}
 relationships$summary |>
@@ -150,7 +150,7 @@ links. They are retained as evidence and interpretation issues. `status_note`
 contains the specific reason and is empty when no interpretation limit was found.
 That empty note does not certify a valid REDCap expression.
 
-Related issues are always available without project-wide diagnostics:
+Related issues are always available without requesting Project Diagnostics:
 
 ```{r issues}
 relationships$issues |>
@@ -181,17 +181,22 @@ particular records, or whether a change is safe to deploy.
 
 ## Understand inspection scope
 
-Coverage counts are **project-wide**, not counts of relationships for the selected
-field. Source rows group available locations, nonblank expressions, and reference
-occurrences by metadata source. Other-project interpretation limits are disclosed
-in aggregate. Source counts overlap with interpretation-limit counts and must
-not be added together as an issue total. Related issue details live in `issues`.
+Project Coverage is **identical for every field summarized from the same
+codebook**. It describes the entire project's inspection scope, not relationships
+for the selected field. Source rows group available locations, nonblank
+expressions, and reference occurrences by metadata source. All project
+interpretation limits are disclosed in aggregate, including locations also
+represented in Issues.
 
-The aggregate notice for interpretation limits elsewhere reads:
+Issues retains the field-specific details: which related metadata locations need
+interpretation, their original expressions, and the reasons. A location can
+appear in Issues and contribute to the Project Coverage counts. These are two
+views of the same information, so their counts should not be added together.
 
-> Some other project metadata could not be fully interpreted. Additional references
-> to this field may therefore be missing from this report. Request diagnostics to
-> inspect those locations.
+The project-wide interpretation notice reads:
+
+> Some project metadata could not be fully interpreted. Relationship reports may
+> therefore omit references. Request Project Diagnostics to inspect those locations.
 
 This is a completeness caveat, not confirmation of an additional relationship.
 
@@ -212,14 +217,43 @@ Alerts, automated survey invitations, survey queues, report filters, data qualit
 rules, external modules/scripts, and other settings outside retained metadata are
 not inspected. An empty result does not establish the absence of external uses.
 
-Request a full project inventory only when needed:
+## Inspect project-wide interpretation issues
 
-```{r diagnostics}
-detailed <- field_relationship_summary("weight_kg", mock_codebook, include_diagnostics = TRUE)
-detailed$diagnostics |>
+Project Diagnostics explains interpretation limits across the entire project,
+including metadata unrelated to the selected field. Request it with
+`include_diagnostics = TRUE`:
+
+```{r project-diagnostics}
+project_review <- field_relationship_summary("age", mock_codebook, include_diagnostics = TRUE)
+project_review$diagnostics |>
+  dplyr::select(dependent_name, metadata_column, expression, status_note)
+```
+
+For `age`, Issues is empty, but Project Diagnostics includes interpretation issues
+in the weight-related examples elsewhere in the project. Project Diagnostics is
+identical for every field summarized from the same codebook. It groups issue
+evidence by metadata location and interpretation status, rather than listing
+blank or successfully inspected locations. Source availability remains in
+Project Coverage.
+
+This adds `diagnostics` to the R report and a **Project Diagnostics** section to
+the viewer and saved HTML. The project-wide issue details do not change the
+selected field's Issues or Project Coverage. These are interpretation limits,
+not a list of confirmed REDCap configuration errors.
+
+## Request the full inspection log only for troubleshooting
+
+The full inspection log includes every retained source location, including blank,
+unavailable, and inspected locations, plus reference diagnostics and exclusions.
+It can be large. Request it separately with `include_inspection_log = TRUE`:
+
+```{r inspection-log}
+inspection <- field_relationship_summary("age", mock_codebook, include_inspection_log = TRUE)
+inspection$inspection_log |>
   dplyr::count(row_kind, status)
 ```
 
-This adds `diagnostics` and an optional Diagnostics viewer section without changing
-related issue details or compact Coverage. It includes blank and unavailable
-locations and can be large.
+This adds `inspection_log` and a **Full Inspection Log** viewer section. The two
+flags are independent; set both to `TRUE` to include both sections. They expose
+different levels of detail from the same inspection and do not enable additional
+analysis or API calls. Both optional tables are omitted by default.

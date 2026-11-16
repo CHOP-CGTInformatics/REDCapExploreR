@@ -4,15 +4,24 @@
 \alias{field_relationship_summary}
 \title{Summarize how a REDCap field is related to project metadata}
 \usage{
-field_relationship_summary(field, codebook, include_diagnostics = FALSE)
+field_relationship_summary(
+  field,
+  codebook,
+  include_diagnostics = FALSE,
+  include_inspection_log = FALSE
+)
 }
 \arguments{
 \item{field}{One exact dictionary field name, including checkbox parent names.}
 
 \item{codebook}{A codebook returned by \code{\link[=build_codebook]{build_codebook()}}.}
 
-\item{include_diagnostics}{Include the full project-wide source and reference
-diagnostics as an additional \code{diagnostics} tibble. Default is \code{FALSE}.}
+\item{include_diagnostics}{Include project-wide interpretation issues as an
+additional \code{diagnostics} tibble (Project Diagnostics). Default is \code{FALSE}.}
+
+\item{include_inspection_log}{Include every inspected metadata location and
+reference diagnostic as an additional \code{inspection_log} tibble. Default is
+\code{FALSE}. This is independent of \code{include_diagnostics}.}
 }
 \value{
 A \code{redcap_field_relationship_summary} list with seven tibbles:
@@ -21,8 +30,12 @@ field uses), \code{references} (related occurrences with original expressions an
 report-local IDs), \code{downstream} (where the field is used), \code{summary}
 (explanations grouped by metadata location and expression), \code{issues}
 (related interpretation issues with original evidence), and \code{coverage}
-(project-wide source counts and scope boundaries). With \code{include_diagnostics = TRUE},
-the additional \code{diagnostics} element retains all metadata locations and issues.
+(project-wide source counts, interpretation limits, and exclusions, identical
+for every field using the same codebook). With \code{include_diagnostics = TRUE},
+the additional \code{diagnostics} element contains project-wide interpretation
+issues, identical for every field. With \code{include_inspection_log = TRUE},
+\code{inspection_log} retains the full inspection inventory, including blank and
+unavailable locations. These flags control returned detail, not analysis.
 \code{relationship} contains machine-readable connection types; \code{resolution}
 describes qualifier or syntax interpretation, not data quality.
 \code{field_matched} records whether the referenced field name exists. Known
