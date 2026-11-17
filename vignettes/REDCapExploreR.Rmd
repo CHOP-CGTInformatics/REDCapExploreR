@@ -61,7 +61,9 @@ your review goal.
 ## Codebook
 
 `build_codebook()` returns a structured view of project fields, choices, forms,
-events, repeating configuration, and project-level metadata.
+events, repeating configuration, and project-level metadata. It retrieves metadata
+only: counts describe configured structure, not populated records. Expressions
+such as branching logic and calculations are retained without being evaluated.
 
 ```{r codebook-api, eval=FALSE}
 codebook <- build_codebook(
@@ -80,6 +82,37 @@ credentials.
 mock_codebook
 head(mock_codebook$fields)
 ```
+
+### Metadata and choices
+
+`fields` contains readable summaries. For downstream analysis,
+`definitions$fields` and `definitions$project` retain complete standardized
+metadata, including additional returned columns. `definitions$source_columns`
+distinguishes columns that were returned from those introduced during
+normalization; an unavailable source is different from an available blank value.
+Field and choice order follow the metadata, and forms follow their first
+appearance in that metadata.
+
+`choices` has one row per coded option. Yes/No and True/False options are supplied
+implicitly, while calculations are excluded. Codes remain character values,
+preserving leading zeros.
+
+For checkbox rows in `codebook$choices` (`choice_type == "checkbox"`), combine
+`field_name` and `choice_value` with `___` to obtain the expected raw export column
+name: `paste0(field_name, "___", choice_value)`. For example, `symptoms` with the
+choice code `fever` gives `symptoms___fever`. Use the raw code in `choice_value`,
+not `choice_label`; `field_name` remains the parent dictionary field name.
+
+### Events and repeating configuration
+
+Field-level event and repeating summaries describe instrument configuration
+across events. A repeating status need not apply to every event; inspect
+`event_instruments` and `repeating` for the detailed context. Classic projects
+have empty event and event-instrument tables. Non-applicable configuration
+responses produce empty tables; permission and other retrieval failures are
+reported as errors.
+
+### View and save
 
 `view_codebook()` presents each available section as an interactive HTML table:
 
