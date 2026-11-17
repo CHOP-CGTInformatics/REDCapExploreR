@@ -2,6 +2,8 @@
 
 ### All vignettes
 
+- [Exploring Field
+  Relationships](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/field-relationships.md):
 - [Understanding REDCap Quality
   Reports](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.md):
 - [Getting Started with

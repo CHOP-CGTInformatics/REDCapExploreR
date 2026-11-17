@@ -5,6 +5,7 @@
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/LICENSE-text.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/LICENSE.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/REDCapExploreR.html</loc></url>
+<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/field-relationships.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/index.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/articles/quality-report.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/authors.html</loc></url>
@@ -14,6 +15,7 @@
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_codebook.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_quality_report.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_record_status_data.html</loc></url>
+<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/field_relationship_summary.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/index.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/mock_codebook.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/mock_quality_report.html</loc></url>
@@ -22,6 +24,8 @@
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/plot_record_status.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/pull_redcap_project.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/save_codebook.html</loc></url>
+<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/save_field_relationship_summary.html</loc></url>
 <url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_codebook.html</loc></url>
+<url><loc>https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_field_relationship_summary.html</loc></url>
 </urlset>
 

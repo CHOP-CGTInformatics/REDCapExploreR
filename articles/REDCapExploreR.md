@@ -46,7 +46,10 @@ matches your review goal.
 
 [`build_codebook()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/build_codebook.md)
 returns a structured view of project fields, choices, forms, events,
-repeating configuration, and project-level metadata.
+repeating configuration, and project-level metadata. It retrieves
+metadata only: counts describe configured structure, not populated
+records. Expressions such as branching logic and calculations are
+retained without being evaluated.
 
 ``` r
 
@@ -59,7 +62,7 @@ codebook
 codebook$fields
 ```
 
-Use `mock_codebook` to inspect the same output structure without API
+Use `mock_codebook` to inspect the output structure without API
 credentials.
 
 ``` r
@@ -68,7 +71,7 @@ mock_codebook
 #> <REDCap codebook>
 #> Project: Mock REDCap Database
 #> Forms: 3
-#> Fields: 11
+#> Fields: 21
 #> Events: 2
 #> Repeating enabled: TRUE
 head(mock_codebook$fields)
@@ -86,6 +89,39 @@ head(mock_codebook$fields)
 #> #   branching_logic <chr>, event_count <int>, event_names <chr>,
 #> #   repeating_status <chr>, field_note <chr>, matrix_group_name <chr>
 ```
+
+### Metadata and choices
+
+`fields` contains readable summaries. For downstream analysis,
+`definitions$fields` and `definitions$project` retain complete
+standardized metadata, including additional returned columns.
+`definitions$source_columns` distinguishes columns that were returned
+from those introduced during normalization; an unavailable source is
+different from an available blank value. Field and choice order follow
+the metadata, and forms follow their first appearance in that metadata.
+
+`choices` has one row per coded option. Yes/No and True/False options
+are supplied implicitly, while calculations are excluded. Codes remain
+character values, preserving leading zeros.
+
+For checkbox rows in `codebook$choices` (`choice_type == "checkbox"`),
+combine `field_name` and `choice_value` with `___` to obtain the
+expected raw export column name:
+`paste0(field_name, "___", choice_value)`. For example, `symptoms` with
+the choice code `fever` gives `symptoms___fever`. Use the raw code in
+`choice_value`, not `choice_label`; `field_name` remains the parent
+dictionary field name.
+
+### Events and repeating configuration
+
+Field-level event and repeating summaries describe instrument
+configuration across events. A repeating status need not apply to every
+event; inspect `event_instruments` and `repeating` for the detailed
+context. Classic projects have empty event and event-instrument tables.
+Non-applicable configuration responses produce empty tables; permission
+and other retrieval failures are reported as errors.
+
+### View and save
 
 [`view_codebook()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_codebook.md)
 presents each available section as an interactive HTML table:
@@ -105,6 +141,77 @@ To save a codebook output to HTML, simply use:
 
 save_codebook(codebook, file = "path.html")
 ```
+
+## Field relationships
+
+A codebook supplies definitions and event/repeat context for a field
+name. Build it once to explore several fields without additional API
+calls or record exports.
+
+``` r
+
+relationships <- field_relationship_summary("weight_kg", mock_codebook)
+relationships
+#> <REDCap field relationships>
+#> Field: weight_kg (follow_up)
+#> Upstream: 1 item
+#> Downstream: 6 direct items, 1 indirect item
+#> Reference occurrences across returned chains: 12
+#> Action-tag condition: 1; Calculation: 1; Piping: 4; Field embedding: 1; Default value: 3; Unknown relationship type: 1; Branching logic: 1
+#> Interpretation issues: 3 related metadata locations (see issues).
+#> Project Coverage: project-wide metadata inspection; see coverage for sources and exclusions.
+#> Indirect connections are reference chains, not predictions of value or behavior changes.
+#> Project interpretation limits are summarized in coverage.
+relationships$upstream
+#> # A tibble: 1 × 27
+#>   item_kind item_name       depth connection path  field_path relationship_types
+#>   <chr>     <chr>           <int> <chr>      <lis> <list>     <chr>             
+#> 1 field     baseline_weigh…     1 direct     <int> <chr [2]>  Default value (@D…
+#> # ℹ 20 more variables: status_note <chr>, reference_chain <chr>,
+#> #   field_name <chr>, form_name <chr>, field_type <chr>, field_label <chr>,
+#> #   select_choices_or_calculations <chr>,
+#> #   text_validation_type_or_show_slider_number <chr>,
+#> #   text_validation_min <dbl>, text_validation_max <dbl>, required_field <lgl>,
+#> #   branching_logic <chr>, identifier <chr>, field_annotation <chr>,
+#> #   field_note <chr>, section_header <chr>, form_label <chr>, …
+relationships$downstream
+#> # A tibble: 7 × 27
+#>   item_kind       item_name depth connection path  field_path relationship_types
+#>   <chr>           <chr>     <int> <chr>      <lis> <list>     <chr>             
+#> 1 field           bmi           1 direct     <int> <chr [2]>  Calculation       
+#> 2 field           visit_su…     1 direct     <int> <chr [2]>  Piping            
+#> 3 field           starting…     1 direct     <int> <chr [2]>  Action-tag condit…
+#> 4 field           weight_a…     1 direct     <int> <chr [2]>  Default value (@D…
+#> 5 field           diagnost…     1 direct     <int> <chr [2]>  Piping            
+#> 6 project_setting custom_r…     1 direct     <int> <chr [2]>  Piping            
+#> 7 field           weight_r…     2 indirect   <int> <chr [3]>  Calculation; Bran…
+#> # ℹ 20 more variables: status_note <chr>, reference_chain <chr>,
+#> #   field_name <chr>, form_name <chr>, field_type <chr>, field_label <chr>,
+#> #   select_choices_or_calculations <chr>,
+#> #   text_validation_type_or_show_slider_number <chr>,
+#> #   text_validation_min <dbl>, text_validation_max <dbl>, required_field <lgl>,
+#> #   branching_logic <chr>, identifier <chr>, field_annotation <chr>,
+#> #   field_note <chr>, section_header <chr>, form_label <chr>, …
+```
+
+`relationships$references` preserves expressions and source locations,
+while `relationships$issues` retains related interpretation issues and
+their evidence. `relationships$coverage` summarizes all project-wide
+inspection limits and exclusions, independently of the selected field.
+The viewer uses the same Upstream, Downstream, Summary, and Project
+Coverage terms and shows every reference by default. The bundled
+codebook includes metadata-only examples of indirect paths, annotations,
+and interpretation notes around `weight_kg`. Use
+`include_diagnostics = TRUE` to include Project Diagnostics, a
+project-wide interpretation issue table. Request
+`include_inspection_log = TRUE` separately for the full inventory of
+inspected locations, including blanks. Use
+[`view_field_relationship_summary()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_field_relationship_summary.md)
+to explore the report and
+[`save_field_relationship_summary()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/save_field_relationship_summary.md)
+to save a standalone HTML viewer. See [Exploring Field
+Relationships](https://chop-cgtinformatics.github.io/REDCapExploreR/articles/field-relationships.md)
+for details.
 
 ## Record status dashboard
 

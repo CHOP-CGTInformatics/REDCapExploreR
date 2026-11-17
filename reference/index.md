@@ -18,6 +18,17 @@ Build and view REDCap project codebooks.
 - [`view_codebook()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_codebook.md)
   : View a REDCap codebook as interactive HTML tables
 
+## Explore Field Relationships
+
+Explain field references, connections, and source coverage.
+
+- [`field_relationship_summary()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/field_relationship_summary.md)
+  : Summarize how a REDCap field is related to project metadata
+- [`view_field_relationship_summary()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/view_field_relationship_summary.md)
+  : View a field relationship summary
+- [`save_field_relationship_summary()`](https://chop-cgtinformatics.github.io/REDCapExploreR/reference/save_field_relationship_summary.md)
+  : Save a field relationship viewer
+
 ## Build Quality Reports
 
 Build exploratory REDCap data quality reports.

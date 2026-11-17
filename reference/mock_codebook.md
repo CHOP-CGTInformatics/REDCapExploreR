@@ -1,7 +1,10 @@
 # Mock REDCap codebook
 
 A synthetic `redcap_codebook` object generated from
-`mock_redcap_project` with REDCapExploreR's internal codebook logic.
+`mock_redcap_project` with additional metadata-only weight/BMI
+relationship examples: calculations, branching, piping, embedding,
+defaults, and clearly marked diagnostic examples. The record-based
+dashboard and quality report fixtures do not include these extra fields.
 
 ## Usage
 
@@ -12,7 +15,7 @@ mock_codebook
 ## Format
 
 A `redcap_codebook` list with `fields`, `choices`, `forms`, `events`,
-`event_instruments`, `repeating`, and `project` elements.
+`event_instruments`, `repeating`, `project`, and `definitions` elements.
 
 ## Source
 
