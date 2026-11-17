@@ -1,0 +1,172 @@
+test_that("references show all returned rows without a default filter", {
+  report <- field_relationship_summary("weight_kg", get_weight_codebook())
+  tables <- get_relationship_viewer_tables(report)
+  expect_equal(nrow(tables$references$data), nrow(report$references))
+  expect_equal(tables$references$data[["Reference text"]], report$references$reference_text)
+  expect_false("view" %in% names(tables$references$data))
+  expect_false("Occurrence ID" %in% names(tables$references$data))
+  widget <- get_metadata_datatable(tables$references$data, 25)
+  expect_null(widget$x$options$searchCols)
+  html <- as.character(view_field_relationship_summary(report))
+  expect_match(html, "Shows every returned reference", fixed = TRUE)
+  expect_match(html, "Project Coverage", fixed = TRUE)
+  expect_error(view_field_relationship_summary(list()), "must be returned")
+  expect_error(view_field_relationship_summary(report, page_length = Inf), "positive integer")
+})
+
+test_that("viewer labels relationship types and hides routine interpretation statuses", {
+  report <- field_relationship_summary("weight_kg", get_weight_codebook())
+  data <- get_relationship_viewer_tables(report)$summary$data
+  expect_true("Calculation" %in% data[["Relationship type"]])
+  expect_true("Explanation" %in% names(data))
+  expect_true(all(data[["Interpretation note"]] == ""))
+  expect_false("resolution" %in% names(data))
+  expect_true(all(report$summary$resolution == "resolved"))
+})
+
+test_that("viewer explains blank interpretation notes and their scope in each table", {
+  report <- field_relationship_summary("weight_kg", mock_codebook, include_diagnostics = TRUE)
+  tables <- get_relationship_viewer_tables(report)
+  html <- as.character(view_field_relationship_summary(report))
+  expect_match(html, "A blank note means no interpretation limit was detected", fixed = TRUE)
+  expect_match(html, "it does not validate the REDCap configuration", fixed = TRUE)
+  expect_match(tables$references$description, "Notes apply to each occurrence.", fixed = TRUE)
+  expect_match(tables$summary$description, "Notes apply to each grouped reference.", fixed = TRUE)
+  expect_match(tables$upstream$description,
+    "Notes combine limits along the displayed shortest reference chain, not every alternative path.",
+    fixed = TRUE
+  )
+  expect_match(tables$downstream$description,
+    "Notes combine limits along the displayed shortest reference chain, not every alternative path.",
+    fixed = TRUE
+  )
+  expect_match(tables$issues$description, "metadata locations involving the selected field or related items", fixed = TRUE)
+  expect_match(
+    tables$diagnostics$description,
+    "metadata locations across the entire project, independent of the selected field", fixed = TRUE
+  )
+})
+
+test_that("Project Diagnostics appear only when explicitly requested", {
+  book <- get_weight_codebook()
+  ordinary <- field_relationship_summary("weight_kg", book)
+  detailed <- field_relationship_summary("weight_kg", book, include_diagnostics = TRUE)
+  expect_false("diagnostics" %in% names(get_relationship_viewer_tables(ordinary)))
+  expect_true("diagnostics" %in% names(get_relationship_viewer_tables(detailed)))
+  expect_match(as.character(view_field_relationship_summary(detailed)), "Project Diagnostics", fixed = TRUE)
+  expect_equal(detailed$coverage, ordinary$coverage)
+})
+
+test_that("viewer roots have independent navigation identifiers", {
+  report <- field_relationship_summary("weight_kg", get_weight_codebook())
+  a <- as.character(view_field_relationship_summary(report))
+  b <- as.character(view_codebook(get_weight_codebook()))
+  id <- function(html) regmatches(html, regexpr('id="redcap-viewer-[^"]+"', html))
+  expect_false(id(a) == id(b))
+  expect_match(a, 'tabindex="0"', fixed = TRUE)
+  expect_match(a, "aria-labelledby=", fixed = TRUE)
+})
+
+test_that("saved relationship HTML includes escaped metadata and local dependencies", {
+  book <- get_weight_codebook()
+  book$definitions$fields$field_annotation[2] <- '<img src=x onerror="alert(1)">'
+  report <- field_relationship_summary("weight_kg", book)
+  file <- tempfile(fileext = ".html")
+  expect_equal(save_field_relationship_summary(report, file), file)
+  html <- paste(readLines(file, warn = FALSE), collapse = "\n")
+  expect_match(html, "data-redcap-codebook-source", fixed = TRUE)
+  expect_match(html, "&lt;img", fixed = TRUE)
+  expect_false(grepl('<img src=x onerror="alert(1)">', html, fixed = TRUE))
+  expect_false(grepl("<script[^>]+ src=", html))
+})
+
+test_that("empty viewer describes the inspected scope", {
+  html <- as.character(view_field_relationship_summary(field_relationship_summary("symptoms", get_weight_codebook())))
+  expect_match(html, "No references to symptoms were found in the inspected metadata", fixed = TRUE)
+})
+
+test_that("viewer sections and print use report terms with concise item tables", {
+  report <- field_relationship_summary("weight_kg", mock_codebook)
+  tables <- get_relationship_viewer_tables(report)
+  expect_equal(names(tables), c("definition", "upstream", "downstream", "summary", "references", "issues", "coverage"))
+  expect_equal(tables$upstream$title, "Upstream")
+  expect_equal(tables$downstream$title, "Downstream")
+  expect_output(print(report), "Upstream: 1 item")
+  expect_output(print(report), "Downstream: 6 direct items, 1 indirect item")
+  expect_output(print(report), "Project Coverage: project-wide")
+  expect_false(any(c("field_name", "item_name", "path", "depth", "Occurrence ID") %in% names(tables$downstream$data)))
+  expect_equal(nrow(tables$downstream$data), nrow(report$downstream))
+  expect_true(any(nzchar(tables$references$data[["Interpretation note"]])))
+  expect_true("Project reference occurrences" %in% names(tables$coverage$data))
+  expect_match(paste(tables$issues$data[["Original expression"]], collapse = " "), "retired_weight", fixed = TRUE)
+})
+
+test_that("viewer uses REDCap labels and shows specific action tags", {
+  report <- field_relationship_summary("weight_kg", mock_codebook)
+  data <- get_relationship_viewer_tables(report)$summary$data
+  expect_true(all(c(
+    "Branching logic", "Piping", "Field embedding", "Default value (@DEFAULT)",
+    "Action-tag condition (@IF)"
+  ) %in% data[["Relationship type"]]))
+  expect_true("Field annotation" %in% data[["Metadata location"]])
+  expect_false(any(c("Evidence path", "Occurrence IDs", "Direction") %in% names(data)))
+})
+
+test_that("Project Coverage is unchanged when field-specific issue details differ", {
+  weight <- get_relationship_viewer_tables(field_relationship_summary("weight_kg", mock_codebook))
+  age <- get_relationship_viewer_tables(field_relationship_summary("age", mock_codebook))
+  expect_equal(weight$coverage$title, "Project Coverage")
+  expect_equal(weight$coverage$data, age$coverage$data)
+  expect_true("issues" %in% names(weight))
+  expect_false("issues" %in% names(age))
+  expect_true("Project interpretation limits" %in% age$coverage$data[["Inspection scope"]])
+})
+
+test_that("Project Diagnostics shows issue evidence and the full log remains separate", {
+  project <- field_relationship_summary("age", mock_codebook, include_diagnostics = TRUE)
+  log <- field_relationship_summary("age", mock_codebook, include_inspection_log = TRUE)
+  both <- field_relationship_summary("age", mock_codebook, include_diagnostics = TRUE, include_inspection_log = TRUE)
+  tables <- get_relationship_viewer_tables(project)
+  expect_equal(tables$diagnostics$title, "Project Diagnostics")
+  expect_equal(nrow(tables$diagnostics$data), 3L)
+  expect_equal(names(tables$diagnostics$data), c(
+    "Item", "Metadata location", "Containing choice code", "Original expression", "Interpretation note"
+  ))
+  expect_false("inspection_log" %in% names(tables))
+  expect_false("diagnostics" %in% names(get_relationship_viewer_tables(log)))
+  expect_equal(get_relationship_viewer_tables(log)$inspection_log$title, "Full Inspection Log")
+  expect_true(all(c("diagnostics", "inspection_log") %in% names(get_relationship_viewer_tables(both))))
+  file <- tempfile(fileext = ".html")
+  save_field_relationship_summary(both, file)
+  html <- paste(readLines(file, warn = FALSE), collapse = "\n")
+  expect_match(html, "Project Diagnostics", fixed = TRUE)
+  expect_match(html, "Full Inspection Log", fixed = TRUE)
+})
+
+test_that("empty Project Diagnostics describes the absence of interpretation issues", {
+  report <- field_relationship_summary("weight_kg", get_weight_codebook(), include_diagnostics = TRUE)
+  expect_equal(nrow(report$diagnostics), 0L)
+  expect_match(as.character(view_field_relationship_summary(report)), "No project-wide interpretation issues were found", fixed = TRUE)
+})
+
+test_that("relationship tables distinguish referenced options from containing choice labels", {
+  report <- field_relationship_summary("symptoms", get_checkbox_relationship_codebook())
+  tables <- get_relationship_viewer_tables(report)
+  summary <- tables$summary$data |>
+    dplyr::select("Referencing item", "Referenced choice", "Containing choice code")
+  references <- tables$references$data |>
+    dplyr::select("Referencing item", "Referenced choice", "Containing choice code")
+  expected <- tibble::tibble(
+    `Referencing item` = c("high_grade", "prompt", "display"),
+    `Referenced choice` = c("[symptoms(fever)] (Fever)", "[symptoms(fever)] (Fever)", NA),
+    `Containing choice code` = c(NA, "1", NA)
+  )
+  expect_equal(summary, expected)
+  expect_equal(references, expected)
+  file <- tempfile(fileext = ".html")
+  save_field_relationship_summary(report, file)
+  html <- paste(readLines(file, warn = FALSE), collapse = "\n")
+  expect_match(html, "Referenced choice", fixed = TRUE)
+  expect_match(html, "Containing choice code", fixed = TRUE)
+  expect_match(html, "[symptoms(fever)] (Fever)", fixed = TRUE)
+})

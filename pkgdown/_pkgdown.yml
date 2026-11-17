@@ -25,6 +25,8 @@ navbar:
       href: reference/index.html
     - text: Articles
       menu:
+      - text: "Exploring Field Relationships"
+        href: articles/field-relationships.html
       - text: "Understanding Quality Report Outputs"
         desc: "Navigate findings, summaries, metadata, and assumptions"
         href: articles/quality-report.html
@@ -45,6 +47,13 @@ reference:
   - build_codebook
   - save_codebook
   - view_codebook
+- title: "Explore Field Relationships"
+  desc: >
+    Explain field references, connections, and source coverage.
+  contents:
+  - field_relationship_summary
+  - view_field_relationship_summary
+  - save_field_relationship_summary
 - title: "Build Quality Reports"
   desc: >
     Build exploratory REDCap data quality reports.

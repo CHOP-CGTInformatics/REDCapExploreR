@@ -14,9 +14,10 @@ pull_redcap_project(redcap_uri, token)
 \value{
 A list containing raw records, metadata, events, event-instrument
 mapping, instruments, and repeating instrument configuration.
-Errors from any structural metadata endpoint are reported rather than
-converted into empty project structure. Records and headers use raw REDCap
-codes with automatic type guessing disabled, and checkbox choices are
+Known responses indicating that events, mappings, or arms do not apply to a
+classic project, or that no repeating instruments/events exist, produce empty
+metadata tables. Other endpoint failures are reported. Records and headers
+use raw REDCap codes with automatic type guessing disabled, and checkbox choices are
 returned as raw \code{0}/\code{1} values. Only empty strings are imported as missing.
 Gray form statuses are exported as blanks rather than Incomplete (\code{0}).
 }

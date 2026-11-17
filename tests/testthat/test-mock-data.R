@@ -7,13 +7,13 @@ test_that("mock record status data reflects current record-status logic", {
   )
 })
 
-test_that("mock codebook reflects current codebook logic", {
-  project <- REDCapExploreR:::get_codebook_project(mock_redcap_project)
-
-  expect_equal(
-    REDCapExploreR:::get_codebook(project),
-    mock_codebook
-  )
+test_that("mock codebook is consistent with its extended metadata", {
+  project <- mock_redcap_project
+  project$metadata <- mock_codebook$definitions$fields
+  project$project_info <- mock_codebook$definitions$project
+  rebuilt <- get_codebook(get_codebook_project(project))
+  tables <- setdiff(names(mock_codebook), "definitions")
+  expect_equal(rebuilt[tables], mock_codebook[tables])
 })
 
 test_that("mock quality report reflects current quality-report logic", {

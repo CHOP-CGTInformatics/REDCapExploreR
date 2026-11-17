@@ -184,7 +184,8 @@ get_dashboard_record_events <- function(project) {
   event_field <- get_event_field(project$data)
 
   project$data |>
-    transmute(
+    mutate(
+      .keep = "none",
       record_id = as.character(.data[[project$record_id_field]]),
       event_name = if (is.na(event_field)) {
         NA_character_
@@ -251,7 +252,8 @@ get_dashboard_event_form_pairs <- function(project, forms) {
   ) {
     return(
       event_instruments |>
-        transmute(
+        mutate(
+          .keep = "none",
           event_name = as.character(.data$redcap_event_name),
           form_name = as.character(.data$form_name)
         ) |>
@@ -262,7 +264,7 @@ get_dashboard_event_form_pairs <- function(project, forms) {
 
   event_field <- get_event_field(project$data)
   events <- project$data |>
-    transmute(event_name = as.character(.data[[event_field]])) |>
+    mutate(.keep = "none", event_name = as.character(.data[[event_field]])) |>
     distinct(.data$event_name)
 
   cross_join(events, forms |> select("form_name"))
@@ -278,7 +280,8 @@ get_dashboard_event_form_pairs <- function(project, forms) {
 get_dashboard_event_labels <- function(project) {
   event_field <- get_event_field(project$data)
   data_events <- project$data |>
-    transmute(
+    mutate(
+      .keep = "none",
       event_name = if (is.na(event_field)) {
         NA_character_
       } else {
@@ -304,7 +307,8 @@ get_dashboard_event_labels <- function(project) {
   events$event_label <- as.character(events[[event_label_column]])
 
   events |>
-    transmute(
+    mutate(
+      .keep = "none",
       event_name = as.character(.data$redcap_event_name),
       event_label = .data$event_label
     ) |>

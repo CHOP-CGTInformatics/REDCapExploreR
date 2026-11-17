@@ -14,3 +14,7 @@ vignettes/*.pdf
 README.html
 
 /.quarto/
+
+**/*.quarto_ipynb
+
+/.github/plans/

@@ -8,9 +8,10 @@
 #'
 #' @returns A list containing raw records, metadata, events, event-instrument
 #'   mapping, instruments, and repeating instrument configuration.
-#'   Errors from any structural metadata endpoint are reported rather than
-#'   converted into empty project structure. Records and headers use raw REDCap
-#'   codes with automatic type guessing disabled, and checkbox choices are
+#'   Known responses indicating that events, mappings, or arms do not apply to a
+#'   classic project, or that no repeating instruments/events exist, produce empty
+#'   metadata tables. Other endpoint failures are reported. Records and headers
+#'   use raw REDCap codes with automatic type guessing disabled, and checkbox choices are
 #'   returned as raw `0`/`1` values. Only empty strings are imported as missing.
 #'   Gray form statuses are exported as blanks rather than Incomplete (`0`).
 #'
@@ -78,10 +79,16 @@ get_redcapr_data <- function(result, label) {
   }
   if (is.list(result) && "data" %in% names(result)) {
     if ("success" %in% names(result) && !identical(result$success, TRUE)) {
-      # REDCapR returns this exact response for a valid classic project.
-      classic <- label == "event metadata" &&
-        identical(result$raw_text, "ERROR: You cannot export events for classic projects")
-      if (classic) {
+      nonapplicable <- c(
+        "event metadata" = "ERROR: You cannot export events for classic projects",
+        "event-instrument metadata" = "ERROR: You cannot export form/event mappings for classic projects",
+        "arm metadata" = "ERROR: You cannot export arms for classic projects",
+        "repeating-instrument metadata" = paste(
+          "ERROR: You cannot export repeating instruments and events because",
+          "the project does not contain any repeating instruments and events"
+        )
+      )
+      if (label %in% names(nonapplicable) && identical(result$raw_text, nonapplicable[[label]])) {
         return(tibble())
       }
       diagnostic <- if (is.character(result$outcome_message) && length(result$outcome_message) == 1) {

@@ -1,34 +1,3 @@
-build_mock_status_dashboard <- function(
-  data,
-  metadata,
-  events = tibble::tibble(),
-  event_instruments = tibble::tibble(),
-  instruments = tibble::tibble(),
-  repeating_instruments = tibble::tibble()
-) {
-  project <- list(
-    data = data,
-    metadata = metadata,
-    events = events,
-    event_instruments = event_instruments,
-    instruments = instruments,
-    repeating_instruments = repeating_instruments
-  )
-
-  testthat::local_mocked_bindings(
-    pull_redcap_project = function(redcap_uri, token) {
-      expect_equal(redcap_uri, "https://redcap.example/api/")
-      expect_equal(token, "test-token")
-      project
-    }
-  )
-
-  build_record_status_data(
-    redcap_uri = "https://redcap.example/api/",
-    token = "test-token"
-  )
-}
-
 test_that("build_record_status_data requires REDCap API credentials", {
   expect_error(
     build_record_status_data(),
@@ -40,7 +9,7 @@ test_that("build_record_status_data requires REDCap API credentials", {
   )
 })
 
-test_that("build_record_status_data returns classic dashboard tiles", {
+test_that("record status data returns classic dashboard tiles", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "2"),
     demographic_value = c("present", "present"),
@@ -61,7 +30,7 @@ test_that("build_record_status_data returns classic dashboard tiles", {
     instrument_label = c("Demographics", "Labs")
   )
 
-  dashboard <- build_mock_status_dashboard(
+  dashboard <- get_test_status_data(
     data = redcap_data,
     metadata = metadata,
     instruments = instruments
@@ -74,7 +43,7 @@ test_that("build_record_status_data returns classic dashboard tiles", {
   expect_equal(dashboard$pct_complete, c(1, NA, 1, 0))
 })
 
-test_that("build_record_status_data returns longitudinal event-form tiles", {
+test_that("record status data returns longitudinal event-form tiles", {
   redcap_data <- tibble::tibble(
     infseq_id = c("A", "A", "B", "B"),
     redcap_event_name = c(
@@ -108,7 +77,7 @@ test_that("build_record_status_data returns longitudinal event-form tiles", {
     arm_num = c(1L, 1L, 1L)
   )
 
-  dashboard <- build_mock_status_dashboard(
+  dashboard <- get_test_status_data(
     data = redcap_data,
     metadata = metadata,
     events = events,
@@ -124,9 +93,6 @@ test_that("build_record_status_data returns longitudinal event-form tiles", {
     levels(dashboard$form_name),
     c("Baseline : main", "Baseline : labs", "Follow-up : main")
   )
-  expect_false(any(
-    dashboard$event_name == "followup_arm_1" & dashboard$form_name == "labs"
-  ))
   expect_equal(
     dashboard |>
       dplyr::filter(
@@ -138,7 +104,7 @@ test_that("build_record_status_data returns longitudinal event-form tiles", {
   )
 })
 
-test_that("build_record_status_data averages repeating instrument instances", {
+test_that("record status data averages repeating instrument instances", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1", "2"),
     redcap_repeat_instrument = c(NA, "repeat_form", "repeat_form", NA),
@@ -156,7 +122,7 @@ test_that("build_record_status_data averages repeating instrument instances", {
     field_label = c("Record ID", "Main Value", "Repeat Value")
   )
 
-  dashboard <- build_mock_status_dashboard(
+  dashboard <- get_test_status_data(
     data = redcap_data,
     metadata = metadata,
     repeating_instruments = tibble::tibble(form_name = "repeat_form")
@@ -176,7 +142,7 @@ test_that("build_record_status_data averages repeating instrument instances", {
   )
 })
 
-test_that("build_record_status_data includes repeating-instrument-only events", {
+test_that("record status data includes repeating-instrument-only events", {
   redcap_data <- tibble::tibble(
     record_id = c("1", "1", "1"),
     redcap_event_name = c(
@@ -225,7 +191,7 @@ test_that("build_record_status_data includes repeating-instrument-only events", 
     form_name = c(NA_character_, "repeat_form")
   )
 
-  dashboard <- build_mock_status_dashboard(
+  dashboard <- get_test_status_data(
     data = redcap_data,
     metadata = metadata,
     events = events,
@@ -431,25 +397,17 @@ test_that("plot_record_status keeps truncated form labels distinct", {
   expect_equal(built_plot$data[[1]]$x, c(1, 2))
 })
 
-test_that("plot_record_status compact mode preserves explicit overrides", {
-  dashboard <- tibble::tibble(
-    record_id = as.character(seq_len(100)),
-    form_name = "Demographics",
-    pct_complete = 1
-  )
-
+test_that("compact plots apply explicit text and tile overrides", {
+  dashboard <- tibble::tibble(record_id = "1", form_name = "Main", pct_complete = 1)
   plot <- plot_record_status(
     dashboard,
-    mode = "compact",
-    tile_linewidth = 0.4,
-    x_text_size = 9,
-    y_text_size = 8,
-    show_y_title = TRUE,
-    form_label_max = NULL
+    mode = "compact", tile_linewidth = 0.4,
+    x_text_size = 9, y_text_size = 8, show_y_title = TRUE
   )
-
-  expect_s3_class(plot, "ggplot")
-  expect_equal(levels(plot$data$form_name), "Demographics")
+  expect_equal(plot$theme$axis.text.x$size, 9)
+  expect_equal(plot$theme$axis.text.y$size, 8)
+  expect_false(inherits(plot$theme$axis.title.y, "element_blank"))
+  expect_equal(ggplot2::ggplot_build(plot)$data[[1]]$linewidth, 0.4)
 })
 
 test_that("plot_record_status allows compact y-axis overrides", {
@@ -515,4 +473,55 @@ test_that("plot_record_status validates dashboard data", {
     ),
     "between 0 and 1"
   )
+})
+
+test_that("mixed repeating configurations are resolved by event and instrument", {
+  data <- tibble::tibble(
+    record_id = rep("1", 4),
+    redcap_event_name = c("baseline_arm_1", "followup_arm_1", "followup_arm_1", "event_arm_2"),
+    redcap_repeat_instrument = c(NA, "assessment", "assessment", NA),
+    redcap_repeat_instance = c(NA, "1", "2", "1"),
+    value = c(NA, NA, "x", NA), assessment_complete = c("2", "2", "0", "2")
+  )
+  metadata <- get_test_metadata(c("record_id", "value"), "assessment")
+  metadata$required_field <- c("y", "y")
+  events <- tibble::tibble(
+    unique_event_name = c("baseline_arm_1", "followup_arm_1", "event_arm_2"),
+    event_name = c("Baseline", "Followup", "Repeating event")
+  )
+  mapping <- tibble::tibble(unique_event_name = events$unique_event_name, form = "assessment")
+  repeating <- tibble::tibble(
+    event_name = c("followup_arm_1", "event_arm_2"),
+    form_name = c("assessment", NA)
+  )
+  project <- get_quality_project_data(list(
+    data = data, metadata = metadata, events = events,
+    event_instruments = mapping, repeating_instruments = repeating
+  ))
+  expect_equal(get_record_status_tiles(project)$pct_complete, c(1, 0.5, 1))
+  report <- get_quality_report(project, "missingness", 0.95, 3)
+  expect_equal(
+    report$findings$event_name[report$findings$issue == "required_field_missing"],
+    events$unique_event_name
+  )
+})
+
+test_that("display label collisions retain distinct plotting positions", {
+  data <- tibble::tibble(
+    record_id = c("1", "1"), redcap_event_name = c("visit_arm_1", "visit_arm_2"),
+    a = "x", b = "y", first_complete = c("2", "0"), second_complete = c("0", "2")
+  )
+  metadata <- get_test_metadata(c("record_id", "a", "b"), c("first", "first", "second"))
+  project <- get_quality_project_data(list(
+    data = data, metadata = metadata,
+    events = tibble::tibble(unique_event_name = data$redcap_event_name, event_name = "Visit"),
+    instruments = tibble::tibble(instrument_name = c("first", "second"), instrument_label = "Same")
+  ))
+  tiles <- get_record_status_tiles(project)
+  expect_length(levels(tiles$form_name), 4)
+  expect_length(unique(ggplot2::ggplot_build(plot_record_status(tiles))$data[[1]]$x), 4)
+  expect_true(all(grepl("visit_arm_", levels(tiles$form_name), fixed = TRUE)))
+  project$data <- dplyr::select(project$data, -"redcap_event_name")
+  tiles <- get_record_status_tiles(project)
+  expect_equal(levels(tiles$form_name), c("Same [first]", "Same [second]"))
 })
